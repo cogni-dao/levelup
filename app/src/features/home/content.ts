@@ -62,13 +62,13 @@ export interface HeroContent {
 }
 
 export const HERO: HeroContent = {
-  statusLabel: "Template online",
-  headlineTop: "Choose a niche.",
-  headlineAccent: "Launch its AI node.",
+  statusLabel: "LevelUp online",
+  headlineTop: "Tell it what you want to learn.",
+  headlineAccent: "Get a plan that levels you up.",
   subhead:
-    "Spawn this template, give the node a mission, and set an AI to work in public. Contributors earn governance tokens, then vote on the agent's roadmap, priorities, and budget.",
-  primaryCta: "Try the template",
-  ctaTagline: "Pick the mission. Train the agent. Govern the budget.",
+    "LevelUp is an AI education node. It grows a living, confidence-scored knowledge network, then builds you a custom learning plan — every step cited to real sources and paired with exercises that prove you actually learned it.",
+  primaryCta: "Build my learning plan",
+  ctaTagline: "Assess · Plan · Practice · Level up.",
 };
 
 /* ─── HERO LINKS ──────────────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export const HERO: HeroContent = {
  */
 export const HERO_LINKS = {
   chatUrl: "https://discord.gg/3b9sSyhZ4z",
-  sourceUrl: "https://github.com/cogni-dao/cogni",
+  sourceUrl: "https://github.com/cogni-dao/levelup",
 } as const;
 
 /* ─── AGENT STREAM ────────────────────────────────────────────────────────
@@ -100,38 +100,38 @@ export interface StreamEvent {
 }
 
 /** Label shown in the stream header next to the spinner. */
-export const AGENT_STREAM_SUBJECT = "cogni/node";
+export const AGENT_STREAM_SUBJECT = "cogni/levelup";
 
 export const AGENT_STREAM_SEQUENCES: StreamEvent[][] = [
   [
     {
       id: "a1",
       type: "thinking",
-      text: "Reading the niche brief: independent coffee shops in Nashville",
+      text: "New learner goal: get from Python basics to shipping a REST API in 6 weeks",
       at: 0,
     },
     {
       id: "a2",
       type: "searching",
-      text: "Scanning local calendars, review sites, and supplier chatter",
+      text: "Placing them on the knowledge network — probing what they already know",
       at: 1800,
     },
     {
       id: "a3",
       type: "analyzing",
-      text: "Mapping demand spikes against staffing and inventory risks",
+      text: "Found the gap: comfortable with syntax, weak on HTTP and async",
       at: 3400,
     },
     {
       id: "a4",
       type: "signal",
-      text: "Signal: weekend event cluster likely to strain 5 shops. Drafting an action plan.",
+      text: "Plan drafted: 9 steps, each cited to a source and gated by an exercise.",
       at: 5600,
     },
     {
       id: "a5",
       type: "done",
-      text: "Pass complete. Recommendation queued for token-holder review.",
+      text: "Learning plan ready. First exercise unlocked.",
       at: 7200,
     },
   ],
@@ -139,31 +139,31 @@ export const AGENT_STREAM_SEQUENCES: StreamEvent[][] = [
     {
       id: "b1",
       type: "thinking",
-      text: "Checking governance priorities from the latest member vote...",
+      text: "New source arrived: a peer-reviewed paper on spaced repetition...",
       at: 0,
     },
     {
       id: "b2",
       type: "searching",
-      text: "Ranking requested work by impact, cost, and mission fit",
+      text: "Checking the network for existing atoms it confirms or contradicts",
       at: 2000,
     },
     {
       id: "b3",
       type: "analyzing",
-      text: "Estimating budget needed for the next agent capability",
+      text: "Two atoms corroborated by 3 independent sources — raising confidence",
       at: 3800,
     },
     {
       id: "b4",
       type: "signal",
-      text: "Signal: route automation beats dashboard polish this epoch.",
+      text: "Atom 'interleaving beats blocking' → confidence 68% → 84%.",
       at: 5400,
     },
     {
       id: "b5",
       type: "done",
-      text: "Pass complete. Draft budget proposal ready for governance.",
+      text: "Knowledge network grew. Downstream plans re-cited automatically.",
       at: 6800,
     },
   ],
@@ -171,25 +171,25 @@ export const AGENT_STREAM_SEQUENCES: StreamEvent[][] = [
     {
       id: "c1",
       type: "thinking",
-      text: "Tallying contribution receipts for the current epoch...",
+      text: "Learner submitted exercise 4: implement a rate limiter...",
       at: 0,
     },
     {
       id: "c2",
       type: "searching",
-      text: "Matching merged work, reviewed signals, and verified outcomes",
+      text: "Grading against the concept, not just the output",
       at: 1600,
     },
     {
       id: "c3",
       type: "analyzing",
-      text: "Calculating token weights before the next priority vote",
+      text: "Mastered token-bucket; the sliding-window edge case is still shaky",
       at: 3200,
     },
     {
       id: "c4",
       type: "done",
-      text: "Pass complete. Governance distribution ready to review.",
+      text: "Plan re-sequenced: a targeted review step inserted before step 5.",
       at: 5000,
     },
   ],
@@ -226,76 +226,76 @@ export interface ShowcaseItem {
 }
 
 export const SHOWCASE_SECTION = {
-  eyebrow: "Launch pattern",
-  heading: "A full node, ready to specialize.",
+  eyebrow: "How LevelUp works",
+  heading: "A knowledge network that teaches, one learner at a time.",
   subhead:
-    "The layout is already here: mission intake, agent work, contribution accounting, and governance. Swap in your niche, copy, and colors — then let the node start producing useful work.",
+    "LevelUp keeps a shared, confidence-scored knowledge base and turns it into a plan built for you: cited steps, exercises that gate progress, and mastery it re-checks as you go.",
 } as const;
 
 export const SHOWCASE_CATEGORIES = [
   "All",
-  "Niche",
-  "Agent",
-  "Tokens",
-  "Governance",
+  "Plans",
+  "Knowledge",
+  "Exercises",
+  "Mastery",
 ] as const;
 
 export const SHOWCASE_ITEMS: ShowcaseItem[] = [
   {
     id: "1",
-    title: "Pick a narrow mission the AI can actually serve",
-    category: "Niche",
-    source: "Node brief",
-    metric: "1",
+    title: "A custom plan for your goal — every step cited",
+    category: "Plans",
+    source: "Learning plan",
+    metric: "9 steps",
     change: 12,
     outcomes: [
-      { label: "Focused", value: 82 },
-      { label: "Vague", value: 18 },
+      { label: "Cited", value: 100 },
+      { label: "Unsourced", value: 0 },
     ],
-    footerLeft: "Coffee, local policy, markets",
-    footerRight: "First decision",
+    footerLeft: "Ordered by prerequisite",
+    footerRight: "Built in ~30s",
   },
   {
     id: "2",
-    title: "Set the agent loose on research, monitoring, and action",
-    category: "Agent",
-    source: "Mission loop",
-    metric: "24/7",
+    title: "A growing knowledge network with confidence scores",
+    category: "Knowledge",
+    source: "Dolt knowledge base",
+    metric: "4.1k atoms",
     change: 9,
     outcomes: [
-      { label: "Autonomous", value: 74 },
-      { label: "Manual", value: 26 },
+      { label: "High confidence", value: 71 },
+      { label: "Provisional", value: 29 },
     ],
-    footerLeft: "Watchlists + workflows",
-    footerRight: "Always on",
+    footerLeft: "Every atom links its sources",
+    footerRight: "Versioned in Dolt",
   },
   {
     id: "3",
-    title: "Reward useful work with governance token weight",
-    category: "Tokens",
-    source: "Activity ledger",
-    metric: "100%",
-    change: 6,
+    title: "Exercises that prove you learned it, not just read it",
+    category: "Exercises",
+    source: "Practice engine",
+    metric: "3 per step",
+    change: 7,
     outcomes: [
-      { label: "Earned", value: 68 },
-      { label: "Unclaimed", value: 32 },
+      { label: "Concept-checked", value: 83 },
+      { label: "Recall-only", value: 17 },
     ],
-    footerLeft: "Receipts, reviews, outcomes",
-    footerRight: "Epoch based",
+    footerLeft: "Graded on understanding",
+    footerRight: "Gates the next step",
   },
   {
     id: "4",
-    title: "Vote on what the AI should learn and fund next",
-    category: "Governance",
-    source: "Treasury + roadmap",
-    metric: "DAO",
-    change: 5,
+    title: "Mastery tracked and the plan re-sequenced as you go",
+    category: "Mastery",
+    source: "Learner profile",
+    metric: "live",
+    change: 6,
     outcomes: [
-      { label: "Members", value: 79 },
-      { label: "Founder", value: 21 },
+      { label: "Mastered", value: 62 },
+      { label: "In progress", value: 38 },
     ],
-    footerLeft: "Priorities + budget",
-    footerRight: "Next vote",
+    footerLeft: "Weak spots trigger review",
+    footerRight: "Updated each session",
   },
 ];
 
@@ -323,68 +323,68 @@ export interface FeedSignal {
 }
 
 export const FEED_SECTION = {
-  eyebrow: "Example node loop",
-  heading: "From blank template to governed AI.",
+  eyebrow: "The knowledge network, in the open",
+  heading: "Every claim scored. Every plan cited.",
   subhead:
-    "This default feed shows the shape of a real node: pick a niche, make the AI useful, account for work, and let token holders steer what happens next.",
+    "LevelUp never asks you to trust it blind. Each knowledge atom carries a confidence score and the sources behind it — and you can watch the network sharpen as new evidence lands.",
 } as const;
 
 /** The status-bar verbs and the running totals shown above the feed. */
 export const FEED_STATUS = {
-  scannedLabel: "template events",
-  signalsLabel: "launch steps",
-  startScanned: 2847,
-  signalsToday: 12,
+  scannedLabel: "sources reviewed",
+  signalsLabel: "atoms updated today",
+  startScanned: 4127,
+  signalsToday: 23,
 } as const;
 
 export const FEED_SIGNALS: FeedSignal[] = [
   {
     id: "s1",
-    title: "Niche selected: Nashville independent coffee ops",
-    category: "Niche",
-    source: "Launch brief",
+    title: "Atom promoted: 'retrieval practice beats re-reading'",
+    category: "Knowledge",
+    source: "Dolt knowledge base",
     direction: "positive",
-    confidence: 86,
+    confidence: 88,
     thesis:
-      "The mission is narrow enough for the agent to monitor real-world sources and broad enough for contributors to improve the playbook.",
-    sources: ["Node brief", "Local events", "Operator handoff"],
+      "A fourth independent source corroborated this atom, so its confidence crossed the threshold to anchor plan steps directly.",
+    sources: ["Roediger & Karpicke 2006", "Dunlosky 2013", "2 replication studies"],
     timestamp: "2m ago",
   },
   {
     id: "s2",
-    title: "Agent run proposed: event-driven staffing forecast",
-    category: "Agent",
-    source: "Mission loop",
+    title: "Learning plan generated: SQL → analytics engineering",
+    category: "Plans",
+    source: "Plan builder",
     direction: "positive",
-    confidence: 72,
+    confidence: 79,
     thesis:
-      "A focused forecast is an early useful behavior: clear inputs, visible outputs, and an outcome the community can judge.",
-    sources: ["Event feeds", "Store hours", "Past signals"],
-    timestamp: "8m ago",
+      "Learner tested out of joins and aggregation, so the plan opens at window functions — 11 steps, each linked to a source and an exercise.",
+    sources: ["Learner assessment", "Knowledge network", "Cited references"],
+    timestamp: "9m ago",
   },
   {
     id: "s3",
-    title: "Contribution receipts ready for token accounting",
-    category: "Tokens",
-    source: "Activity ledger",
+    title: "Conflict flagged between two nutrition atoms",
+    category: "Knowledge",
+    source: "Consistency check",
     direction: "neutral",
-    confidence: 69,
+    confidence: 54,
     thesis:
-      "Useful work should become governance weight only after it is reviewable: merged changes, verified research, and accepted operations all leave receipts.",
-    sources: ["PR history", "Review notes", "Activity ledger"],
-    timestamp: "14m ago",
+      "A new meta-analysis contradicts an older atom; both are held as provisional and demoted in confidence until a reviewer resolves the conflict.",
+    sources: ["2024 meta-analysis", "Prior guideline", "Reviewer queue"],
+    timestamp: "16m ago",
   },
   {
     id: "s4",
-    title: "First governance question drafted",
-    category: "Governance",
-    source: "Roadmap",
+    title: "Plan re-sequenced after exercise result",
+    category: "Mastery",
+    source: "Learner profile",
     direction: "positive",
-    confidence: 76,
+    confidence: 82,
     thesis:
-      "Token holders should decide whether the next budget goes to better source coverage, stronger automation, or a public dashboard.",
-    sources: ["Treasury", "Roadmap", "Member requests"],
-    timestamp: "21m ago",
+      "The learner aced recursion but missed the base-case exercise, so a short review step was inserted before the next topic unlocks.",
+    sources: ["Exercise grade", "Mastery model", "Plan graph"],
+    timestamp: "24m ago",
   },
 ];
 
@@ -397,10 +397,10 @@ export interface StatItem {
 }
 
 export const STATS: StatItem[] = [
-  { value: "1", label: "Niche" },
-  { value: "1", label: "Mission" },
-  { value: "24/7", label: "AI Worker" },
-  { value: "DAO", label: "Governance" },
+  { value: "4.1k", label: "Knowledge atoms" },
+  { value: "100%", label: "Plan steps cited" },
+  { value: "3x", label: "Exercises per step" },
+  { value: "Live", label: "Mastery tracking" },
 ];
 
 /* ─── STREAM ICONS ────────────────────────────────────────────────────────

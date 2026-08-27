@@ -15,7 +15,10 @@ scope_key: "default"
 
 intent:
   name: levelup
-  mission: "Define levelup's one-line mission here — refine in .cogni/repo-spec.yaml (surfaced at session start)."
+  mission: "LevelUp is an AI education node: it grows a living, confidence-scored knowledge network and builds every learner a custom, source-cited education plan with exercises."
+  brand:
+    icon: Sprout
+    color: "#349866"
 
 governance:
   dao_contract: "0x2871cdd7cb18938d572de9b348a888c70433eb02"
