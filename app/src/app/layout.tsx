@@ -34,9 +34,8 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "LevelUp — AI that builds your education plan",
-  description:
-    "LevelUp is an AI education node. It grows a confidence-scored knowledge network and builds every learner a custom, source-cited plan with exercises.",
+  title: "Cogni",
+  description: "Web3 Gov + Web2 AI",
 };
 
 // See operator/app/src/app/layout.tsx for rationale — `headers()` in the

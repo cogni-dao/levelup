@@ -20,9 +20,9 @@ import {
   Github,
   LayoutDashboard,
   Shield,
-  Sprout,
   Vote,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -90,18 +90,18 @@ export function AppSidebar(): ReactElement {
       <SidebarHeader className="h-16 shrink-0 justify-center">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip="LevelUp">
+            <SidebarMenuButton size="lg" asChild tooltip="Cogni">
               <Link href="/chat">
                 <div className="flex aspect-square size-8 items-center justify-center">
-                  <Sprout
-                    className="size-5 shrink-0 text-primary"
-                    strokeWidth={2}
-                    aria-hidden="true"
+                  <Image
+                    src="/TransparentBrainOnly.png"
+                    alt="Cogni"
+                    width={24}
+                    height={24}
                   />
                 </div>
-                <span className="truncate font-bold">
-                  cogni
-                  <span className="text-gradient-accent">/levelup</span>
+                <span className="truncate font-bold text-gradient-accent">
+                  Cogni
                 </span>
               </Link>
             </SidebarMenuButton>
