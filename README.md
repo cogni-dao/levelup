@@ -1,9 +1,17 @@
-# node-template
+# levelup
 
-Node-at-root template for a **Cogni full-app submodule node** — the canonical single node, minted via GitHub generate-from-template and added as a git submodule at `nodes/<slug>/` in the operator monorepo (`Cogni-DAO/cogni`).
+**LevelUp is an AI education node.** It grows a living, confidence-scored knowledge
+network, then builds every learner a custom education plan — each step cited to real
+sources and paired with exercises that prove the learning stuck.
 
-Seeded from `Cogni-DAO/cogni:nodes/node-template/` and projected to a
-node-at-repo-root build surface.
+Live: [levelup.cognidao.org](https://levelup.cognidao.org) · candidate: [levelup-test.cognidao.org](https://levelup-test.cognidao.org)
+
+LevelUp is a [Cogni](https://cognidao.org) node: a sovereign repo with its own DAO,
+knowledge base, and contributor ledger, minted from
+[`Cogni-DAO/node-template`](https://github.com/Cogni-DAO/node-template) and deployed by
+the operator control plane. It builds its mission; the substrate handles the plumbing.
+
+## What is a Cogni node
 
 - **Node-at-root** layout (`app/`, `graphs/`, `packages/`, `.cogni/`) so it mounts cleanly at `nodes/<slug>/` when added as a submodule.
 - `.cogni/secrets-catalog.yaml` + `k8s/external-secrets/` are intentionally absent (bug.5086 Part D: a node inherits baseline secrets via the substrate; declares its own only when it has unique ones).
