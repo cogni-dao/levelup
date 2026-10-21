@@ -4,8 +4,8 @@
 /**
  * Module: `@app/readyz`
  * Purpose: HTTP readiness endpoint. The default (k8s probe) path answers only "can this pod serve HTTP?" — local serving readiness: env, runtime secrets, system tenant.
- * Scope: Validates env + runtime secrets + system tenant (fatal). Checks EVM RPC, Temporal, and scheduler-worker connectivity but treats transient failures as NON-FATAL on the default probe (logged, still 200). `?deep=1` restores hard substrate assertion for provisioning / stack-test smoke checks.
- * Invariants: Always returns valid readyz schema; force-dynamic runtime. Every managed non-test node requires and exercises EVM RPC even before payment activation. The default path does not drain the fleet for a transient upstream failure (incident 2026-06-26: scheduler-worker hiccup → fleet-wide 502); `?deep=1` forces a live RPC read and makes EVM RPC, Temporal, and scheduler-worker failures fatal (503).
+ * Scope: Validates env + runtime secrets + system tenant (fatal). Checks EVM RPC, Temporal, and scheduler-worker connectivity but does not fail the default probe on transient substrate failures (logged, still 200). `?deep=1` restores hard substrate assertion for provisioning / stack-test smoke checks.
+ * Invariants: Valid readyz schema and dynamic runtime; EVM config required; default substrate failures nonfatal, deep checks fatal.
  * Side-effects: IO (HTTP response, structured logging, network calls to RPC and Temporal)
  * Notes: Used by Docker HEALTHCHECK, deployment validation, K8s readiness probes.
  *        HTTP status is primary truth: 200 = ready, 503 = not ready.
@@ -32,6 +32,7 @@ import {
 } from "@/shared/env/invariants";
 import type { RequestContext } from "@/shared/observability";
 import { setBuildInfo } from "@/shared/observability/server/metrics";
+import { readinessErrorFields } from "./_lib/error-fields";
 
 export const dynamic = "force-dynamic";
 
@@ -74,10 +75,7 @@ function logReadinessFailure(
     );
   } else {
     ctx.log.error(
-      {
-        reason: "INTERNAL_ERROR",
-        error: error.message,
-      },
+      readinessErrorFields(error),
       "readiness check failed: internal error"
     );
   }
