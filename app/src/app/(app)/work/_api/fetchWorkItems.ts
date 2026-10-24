@@ -46,23 +46,26 @@ async function responseErrorMessage(
 }
 
 export async function fetchWorkItems(): Promise<WorkItemsListOutput> {
-  const response = await fetch("/api/v1/work/items", {
-    method: "GET",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({
-      error: "Failed to fetch work items",
-    }));
-    throw new Error(error.error || `HTTP ${response.status}`);
-  }
-
-  return response.json();
+  const items: WorkItemDto[] = [];
+  const seen = new Set<string>();
+  let cursor: string | undefined;
+  do {
+    const params = new URLSearchParams({ limit: "500" });
+    if (cursor) params.set("cursor", cursor);
+    const response = await fetch(`/api/v1/work/items?${params}`, {
+      method: "GET", headers: { "Content-Type": "application/json" },
+      credentials: "same-origin", cache: "no-store",
+    });
+    if (!response.ok) throw new Error(await responseErrorMessage(response, `HTTP ${response.status}`));
+    const page: WorkItemsListOutput = await response.json();
+    items.push(...page.items);
+    const nextCursor = page.nextCursor ?? page.pageInfo?.endCursor ?? undefined;
+    if (page.pageInfo?.hasMore && !nextCursor) throw new Error("Work-items cursor is missing for a remaining page");
+    cursor = page.pageInfo?.hasMore === false ? undefined : nextCursor;
+    if (cursor && seen.has(cursor)) throw new Error("Work-items cursor did not advance");
+    if (cursor) seen.add(cursor);
+  } while (cursor);
+  return { items, pageInfo: { endCursor: null, hasMore: false } };
 }
 
 export async function fetchWorkItem(id: string): Promise<WorkItemDto> {

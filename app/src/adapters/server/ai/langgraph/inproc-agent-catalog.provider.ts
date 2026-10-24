@@ -45,7 +45,7 @@ export class LangGraphInProcAgentCatalogProvider
   readonly providerId = LANGGRAPH_PROVIDER_ID;
   private readonly agentDescriptors: readonly AgentDescriptor[];
 
-  constructor() {
+  constructor(private readonly catalog: typeof LANGGRAPH_CATALOG = LANGGRAPH_CATALOG) {
     // Build descriptors from catalog at construction time
     this.agentDescriptors = this.buildDescriptors();
   }
@@ -56,7 +56,7 @@ export class LangGraphInProcAgentCatalogProvider
    * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field (not displayName).
    */
   private buildDescriptors(): readonly AgentDescriptor[] {
-    return Object.entries(LANGGRAPH_CATALOG).map(([graphName, entry]) => {
+    return Object.entries(this.catalog).map(([graphName, entry]) => {
       const graphId = `${this.providerId}:${graphName}`;
       return {
         agentId: graphId, // P0: agentId === graphId

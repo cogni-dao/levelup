@@ -108,6 +108,9 @@ COPY --from=builder --chown=nextjs:nodejs /app/app/src/adapters/server/db/doltgr
 # and runs the post-migrate schema check before any tracking-row stamping,
 # closing the silent-skip gap from drizzle-orm's folderMillis-only "applied?"
 # check.
+# Public migrator is outside Next's traced app graph.
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@cogni-dao/knowledge-store/dist /app/node_modules/@cogni-dao/knowledge-store/dist
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules/@cogni-dao/knowledge-store/package.json /app/node_modules/@cogni-dao/knowledge-store/package.json
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate-doltgres.mjs /app/app/migrate-doltgres.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/verify-doltgres-schema.mjs /app/app/verify-doltgres-schema.mjs
 
@@ -132,6 +135,13 @@ COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./app/con
 # No default: if CI forgets to pass the arg, APP_BUILD_SHA is empty and the pod visibly reports it.
 ARG BUILD_SHA
 ENV APP_BUILD_SHA=$BUILD_SHA
+
+# Static artifact identity for the operator's candidate bundle verification.
+RUN if [ -n "$BUILD_SHA" ]; then \
+      mkdir -p ./app/public/__cogni-build && \
+      printf '%s' "$BUILD_SHA" > "./app/public/__cogni-build/${BUILD_SHA}.txt" && \
+      chown -R nextjs:nodejs ./app/public/__cogni-build; \
+    fi
 
 USER nextjs
 

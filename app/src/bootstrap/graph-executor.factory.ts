@@ -21,7 +21,8 @@
  */
 
 import type { SourceSystem, ToolSourcePort } from "@cogni/ai-core";
-import { CORE_TOOL_BUNDLE } from "@cogni/ai-tools";
+import { LEVELUP_CORE_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
+import { LANGGRAPH_CATALOG } from "@cogni/node-template-graphs";
 import type {
   ExecutionContext,
   GraphFinal,
@@ -38,7 +39,6 @@ import {
 } from "@cogni/graph-execution-host";
 import type { UserId } from "@cogni/ids";
 import {
-  LANGGRAPH_CATALOG,
   loadMcpTools,
   McpToolSource,
   parseMcpConfigFromEnv,
@@ -534,7 +534,8 @@ function createInProcProvider(
     inprocAdapter,
     container.toolSource,
     () => cache.getSource(),
-    [...CORE_TOOL_BUNDLE]
+    [...LEVELUP_CORE_TOOL_BUNDLE],
+    LANGGRAPH_CATALOG
   );
 }
 

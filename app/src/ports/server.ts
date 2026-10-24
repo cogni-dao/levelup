@@ -66,7 +66,11 @@ export {
 // this port to its own knowledge_<slug> store.
 export type {
   WorkItemsCreateInput,
-  WorkItemsDoltgresPort,
   WorkItemsPatchInput,
   WorkItemsPatchSet,
 } from "@cogni/work-items/adapters/doltgres";
+
+// Preserve this node's v1 Dolt lease contract while upgrading shared content.
+import type { WorkItemsContentPort } from "@cogni/work-items/adapters/doltgres";
+import type { WorkItemsDoltgresPort as LegacyWorkItemsPort } from "@cogni/legacy-work-items/adapters/doltgres";
+export type WorkItemsDoltgresPort = WorkItemsContentPort & Pick<LegacyWorkItemsPort, "claim" | "heartbeat" | "release">;

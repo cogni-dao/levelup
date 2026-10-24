@@ -20,7 +20,7 @@ import type {
 	RepoCapability,
 	WebSearchCapability,
 } from "@cogni/ai-tools";
-import { CORE_TOOL_BUNDLE } from "@cogni/ai-tools";
+import { LEVELUP_CORE_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import {
 	createDefaultRegistries,
@@ -53,6 +53,7 @@ import {
 	createDoltgresPusher,
 	DoltgresEdoResolverAdapter,
 	DoltgresKnowledgeContributionAdapter,
+	DoltBranchSessionRunner,
 	DoltgresKnowledgeStoreAdapter,
 	wrapPushSafe,
 } from "@cogni/knowledge-store/adapters/doltgres";
@@ -70,7 +71,7 @@ import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { WorkItemQueryPort } from "@cogni/work-items";
-import { DoltgresWorkItemAdapter } from "@cogni/work-items/adapters/doltgres";
+import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
 import {
 	Client as TemporalClient,
@@ -96,6 +97,7 @@ import {
 	GITHUB_ADAPTER_VERSION,
 	GitHubWebhookNormalizer,
 	getAppDb,
+	getExecutionScope,
 	LangfuseAdapter,
 	LiteLlmAdapter,
 	type MimirAdapterConfig,
@@ -681,10 +683,6 @@ function createContainer(): Container {
 	const workItemAdapter = new MarkdownWorkItemAdapter(
 		env.COGNI_REPO_ROOT ?? "/nonexistent",
 	);
-	const workItemCapability = createWorkItemCapability({
-		workItemQuery: workItemAdapter,
-		workItemCommand: workItemAdapter,
-	});
 
 	// ScheduleCapability for AI tools (reads actorUserId from ALS at invocation time)
 	const scheduleCapability = createScheduleCapability({
@@ -722,12 +720,19 @@ function createContainer(): Container {
 		const workItemsClient = createWorkItemsClient();
 		// Node stores start their allocator at 1; operator alone reserves the
 		// imported legacy range below 5000.
-		doltgresWorkItems = new DoltgresWorkItemAdapter(workItemsClient, {
-			logger: log,
-			recreateClient: createWorkItemsClient,
+		doltgresWorkItems = new DoltgresLevelUpWorkItemAdapter(workItemsClient, log, {
+			recreateClient: createWorkItemsClient, legacyClient: createWorkItemsClient(),
+		});
+		const createKnowledgeBranchClient = () => buildDoltgresClient({
+			connectionString: env.DOLTGRES_URL as string,
+			applicationName: `cogni_knowledge_branch_${env.SERVICE_NAME ?? "app"}`,
+			max: 1,
+		});
+		const knowledgeWriter = new DoltBranchSessionRunner(createKnowledgeBranchClient(), {
+			writerProtocol: "bridge", logger: log, recreateClient: createKnowledgeBranchClient,
 		});
 		const knowledgePort = new DoltgresKnowledgeStoreAdapter({
-			sql: doltClient,
+			sql: doltClient, writerSession: knowledgeWriter,
 		});
 		knowledgeStorePort = knowledgePort;
 		knowledgeCapability = createKnowledgeCapability(knowledgePort);
@@ -738,6 +743,7 @@ function createContainer(): Container {
 		edoCapability = createEdoCapability(knowledgePort, edoResolver);
 		const contributionPort = new DoltgresKnowledgeContributionAdapter({
 			sql: doltClient,
+			writerSession: knowledgeWriter,
 		});
 		// Optional post-merge mirror to DoltHub (task.5069). Disabled when
 		// DOLTHUB_REMOTE_URL is unset. Gate-by-secret-presence follows the
@@ -811,8 +817,23 @@ function createContainer(): Container {
 		log.warn("Knowledge store not configured (DOLTGRES_URL not set)");
 	}
 
+	const workItemCapability = createWorkItemCapability({
+		workItemQuery: workItemAdapter,
+		workItemCommand: workItemAdapter,
+		backlogReader: doltgresWorkItems,
+		backlogWriter: {
+			store: doltgresWorkItems,
+			principalId: () => {
+				const actor = getExecutionScope().actorUserId;
+				if (!actor) throw new Error("Authenticated work-item actor required");
+				return actor;
+			},
+		},
+	});
+
 	// ToolSource with real implementations (per CAPABILITY_INJECTION)
 	const toolBindings = createToolBindings({
+		nodePublicOrigin: env.APP_BASE_URL,
 		knowledgeCapability,
 		edoCapability,
 		metricsCapability,
@@ -822,7 +843,7 @@ function createContainer(): Container {
 		vcsCapability: stubVcsCapability,
 		workItemCapability,
 	});
-	const toolSource = createBoundToolSource([...CORE_TOOL_BUNDLE], toolBindings);
+	const toolSource = createBoundToolSource([...LEVELUP_CORE_TOOL_BUNDLE], toolBindings);
 
 	// Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
 	const config: ContainerConfig = {
