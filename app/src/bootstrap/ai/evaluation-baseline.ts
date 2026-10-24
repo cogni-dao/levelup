@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: LicenseRef-LevelUpForm-Shield-1.0.0
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /** Published evaluation behavior composed with LevelUp's existing product policy. */
