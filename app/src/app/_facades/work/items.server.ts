@@ -20,7 +20,9 @@ import type {
   WorkItemsListOutput,
 } from "@cogni/node-contracts";
 import type { WorkItem, WorkItemId } from "@cogni/work-items";
-import { toWorkItemId } from "@cogni/work-items";
+import { rankScore, toWorkItemId, WorkItemScoresInvalidError } from "@cogni/work-items";
+import { WorkItemRevisionConflictError } from "@cogni/work-items/adapters/doltgres";
+export { WorkItemScoresInvalidError, WorkItemRevisionConflictError };
 
 import { getContainer } from "@/bootstrap/container";
 
@@ -77,6 +79,8 @@ function toDto(item: WorkItem): WorkItemDto {
     priority: item.priority,
     rank: item.rank,
     estimate: item.estimate,
+    scores: item.scores,
+    rankScore: rankScore(item.scores),
     summary: item.summary,
     outcome: item.outcome,
     projectId: item.projectId as string | undefined,
@@ -139,6 +143,11 @@ function dropUndefined<T extends Record<string, unknown>>(
 
 function rethrowBackendError(error: unknown): never {
   const message = (error as Error)?.message ?? "";
+  if ((error as Error)?.name === "WorkItemScoresInvalidError") throw new WorkItemScoresInvalidError((error as WorkItemScoresInvalidError).issues);
+  if ((error as Error)?.name === "WorkItemRevisionConflictError") {
+    const conflict = error as WorkItemRevisionConflictError;
+    throw new WorkItemRevisionConflictError(conflict.id, conflict.expectedRevision, conflict.currentRevision);
+  }
   const notFound = /^Work item not found: (.+)$/.exec(message);
   if (notFound?.[1]) throw new WorkItemNotFoundError(notFound[1]);
   if (
@@ -267,6 +276,7 @@ export async function createWorkItem(
         ...(input.priority !== undefined && { priority: input.priority }),
         ...(input.rank !== undefined && { rank: input.rank }),
         ...(input.estimate !== undefined && { estimate: input.estimate }),
+        ...(input.scores != null && { scores: input.scores }),
       },
       sessionUser.id
     );
@@ -285,6 +295,7 @@ export async function patchWorkItem(
     const patched = await container.doltgresWorkItems.patch(
       {
         id: toWorkItemId(input.id),
+        ...(input.expectedRevision !== undefined && { expectedRevision: input.expectedRevision }),
         set: dropUndefined(input.set),
       },
       sessionUser.id
