@@ -70,6 +70,8 @@ import {
 import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
+import type { ScheduleRunReader } from "@cogni/scheduling";
+import { PostgresScheduleRunReader } from "@cogni/scheduling/adapters/postgres";
 import type { WorkItemQueryPort } from "@cogni/work-items";
 import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
@@ -234,6 +236,7 @@ export interface Container {
 	executionRequestPort: ExecutionRequestPort;
 	graphRunRepository: GraphRunRepository;
 	scheduleManager: ScheduleUserPort;
+	scheduleRunReader: ScheduleRunReader;
 	/** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
 	metricsCapability: MetricsCapability;
 	/** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
@@ -654,6 +657,8 @@ function createContainer(): Container {
 		log.child({ component: "DrizzleScheduleUserAdapter" }),
 	);
 
+	const scheduleRunReader = new PostgresScheduleRunReader(db.$client);
+
 	// Worker scheduling (serviceDb, BYPASSRLS)
 	const executionGrantWorkerPort = new DrizzleExecutionGrantWorkerAdapter(
 		serviceDb,
@@ -987,6 +992,7 @@ function createContainer(): Container {
 		executionRequestPort,
 		graphRunRepository,
 		scheduleManager,
+		scheduleRunReader,
 		metricsCapability,
 		webSearchCapability,
 		repoCapability,
