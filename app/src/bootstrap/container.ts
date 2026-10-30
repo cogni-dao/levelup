@@ -12,15 +12,14 @@
  * @public
  */
 
+import type { EdoCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
 import type { ToolSourcePort } from "@cogni/ai-core";
 import type {
-	EdoCapability,
-	KnowledgeCapability,
 	MetricsCapability,
 	RepoCapability,
 	WebSearchCapability,
 } from "@cogni/ai-tools";
-import { LEVELUP_CORE_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
+import { LEVELUP_LOCAL_TOOL_BUNDLE, LEVELUP_SHARED_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import {
 	createDefaultRegistries,
@@ -849,7 +848,7 @@ function createContainer(): Container {
 		vcsCapability: stubVcsCapability,
 		workItemCapability,
 	});
-	const toolSource = createBoundToolSource([...LEVELUP_CORE_TOOL_BUNDLE], toolBindings);
+	const toolSource = createBoundToolSource(LEVELUP_LOCAL_TOOL_BUNDLE, toolBindings, LEVELUP_SHARED_TOOL_BUNDLE);
 
 	// Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
 	const config: ContainerConfig = {

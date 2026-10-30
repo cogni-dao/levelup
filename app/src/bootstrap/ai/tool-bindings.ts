@@ -15,8 +15,6 @@
  */
 
 import type {
-  EdoCapability,
-  KnowledgeCapability,
   MetricsCapability,
   RepoCapability,
   ScheduleCapability,
@@ -25,10 +23,6 @@ import type {
   WebSearchCapability,
 } from "@cogni/ai-tools";
 import {
-  createEdoHypothesizeImplementation,
-  createEdoRecordOutcomeImplementation,
-  createKnowledgeReadImplementation,
-  createKnowledgeWriteImplementation,
   createMetricsQueryImplementation,
   createRepoListImplementation,
   createRepoOpenImplementation,
@@ -64,14 +58,23 @@ import {
   WORK_ITEM_TRANSITION_NAME,
 } from "@cogni/ai-tools";
 
+import type {
+  EdoCapability,
+  KnowledgeCapability,
+} from "@cogni/knowledge-store/contracts";
+
 import {
   createEdoDecideImplementation,
+  createEdoHypothesizeImplementation,
+  createEdoRecordOutcomeImplementation,
+  createGoalListImplementation,
+  createKnowledgeReadImplementation,
   createKnowledgeSearchImplementation,
+  createKnowledgeWriteImplementation,
   createWorkItemQueryImplementation,
   createWorkItemTransitionImplementation,
-  createGoalListImplementation,
-  getCurrentTimeImplementation,
   GOAL_LIST_NAME,
+  getCurrentTimeImplementation,
   type WorkItemCapability,
 } from "@cogni/shared-ai-tools";
 
@@ -132,6 +135,7 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     }) as AnyToolImplementation,
     [KNOWLEDGE_READ_NAME]: createKnowledgeReadImplementation({
       knowledgeCapability: deps.knowledgeCapability,
+      nodePublicOrigin: deps.nodePublicOrigin,
     }) as AnyToolImplementation,
     [KNOWLEDGE_WRITE_NAME]: createKnowledgeWriteImplementation({
       knowledgeCapability: deps.knowledgeCapability,

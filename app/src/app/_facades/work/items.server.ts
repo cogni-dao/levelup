@@ -20,7 +20,7 @@ import type {
   WorkItemsListOutput,
 } from "@cogni/node-contracts";
 import type { WorkItem, WorkItemId } from "@cogni/work-items";
-import { rankScore, toWorkItemId, WorkItemScoresInvalidError } from "@cogni/work-items";
+import { toWorkItemDto as toDto, toWorkItemId, WorkItemScoresInvalidError } from "@cogni/work-items";
 import { WorkItemRevisionConflictError } from "@cogni/work-items/adapters/doltgres";
 export { WorkItemScoresInvalidError, WorkItemRevisionConflictError };
 
@@ -67,41 +67,6 @@ export class WorkItemsBackendNotReadyError extends Error {
     super(message);
     this.name = "WorkItemsBackendNotReadyError";
   }
-}
-
-function toDto(item: WorkItem): WorkItemDto {
-  return {
-    id: item.id as string,
-    type: item.type,
-    title: item.title,
-    status: item.status,
-    ...(item.actor !== "either" && { actor: item.actor }),
-    priority: item.priority,
-    rank: item.rank,
-    estimate: item.estimate,
-    scores: item.scores,
-    rankScore: rankScore(item.scores),
-    summary: item.summary,
-    outcome: item.outcome,
-    projectId: item.projectId as string | undefined,
-    parentId: item.parentId as string | undefined,
-    node: item.node,
-    assignees: item.assignees as WorkItemDto["assignees"],
-    externalRefs: item.externalRefs as WorkItemDto["externalRefs"],
-    labels: item.labels as string[],
-    specRefs: item.specRefs as string[],
-    branch: item.branch,
-    pr: item.pr,
-    reviewer: item.reviewer,
-    revision: item.revision,
-    blockedBy: item.blockedBy as string | undefined,
-    deployVerified: item.deployVerified,
-    claimedByRun: item.claimedByRun,
-    claimedAt: item.claimedAt,
-    lastCommand: item.lastCommand,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-  };
 }
 
 function nextActionForWorkItem(item: WorkItem): string | null {
@@ -173,6 +138,9 @@ export async function listWorkItems(
 ): Promise<WorkItemsListOutput> {
   const container = getContainer();
   const queryShared = {
+    ...(input.labels && { labels: input.labels }),
+    ...(input.labelPrefix && { labelPrefix: input.labelPrefix }),
+    ...(input.scored !== undefined && { scored: input.scored }),
     ...(input.types && { types: input.types as WorkItem["type"][] }),
     ...(input.statuses && { statuses: input.statuses as WorkItem["status"][] }),
     ...(input.text && { text: input.text }),

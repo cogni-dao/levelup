@@ -51,8 +51,12 @@ export const GET = wrapRouteHandlerWithLogging(
     const nodeParam = url.searchParams.get("node");
     const limitParam = url.searchParams.get("limit");
     const cursorParam = url.searchParams.get("cursor");
+    const scoredParam = url.searchParams.get("scored");
 
     const input = workItemsListOperation.input.parse({
+      labels: url.searchParams.get("labels")?.split(","),
+      labelPrefix: url.searchParams.get("labelPrefix") ?? undefined,
+      scored: scoredParam === null ? undefined : scoredParam === "true" ? true : scoredParam === "false" ? false : scoredParam,
       types: typesParam ? typesParam.split(",") : undefined,
       statuses: statusesParam ? statusesParam.split(",") : undefined,
       text: textParam ?? undefined,

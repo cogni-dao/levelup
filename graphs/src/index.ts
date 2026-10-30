@@ -10,3 +10,6 @@ export const LANGGRAPH_CATALOG = { ...BASE_CATALOG, "work-prioritizer": prioriti
 export const LANGGRAPH_GRAPH_IDS = { ...BASE_GRAPH_IDS, workPrioritizer: "langgraph:work-prioritizer" } as const;
 export { DEFAULT_LANGGRAPH_GRAPH_ID } from "@cogni/langgraph-graphs";
 export * from "@cogni/langgraph-graphs/graphs";
+
+// Published wrapper resolves its public ai-tools peer here; app keeps its local tool package.
+export { createInProcGraphRunner } from "@cogni/shared-langgraph-graphs";

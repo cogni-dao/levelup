@@ -25,21 +25,12 @@ export const KnowledgeListQuerySchema = z.object({
 });
 export type KnowledgeListQuery = z.infer<typeof KnowledgeListQuerySchema>;
 
-export const KnowledgeRowSchema = z.object({
-  id: z.string(),
-  domain: z.string(),
-  entityId: z.string().nullable(),
-  title: z.string(),
-  content: z.string(),
-  useWhen: z.string().nullable().optional(),
-  entryType: z.string(),
-  confidencePct: z.number().int().nullable(),
-  sourceType: z.string(),
-  sourceRef: z.string().nullable(),
-  tags: z.array(z.string()).nullable(),
-  createdAt: z.string().nullable(),
-});
-export type KnowledgeRow = z.infer<typeof KnowledgeRowSchema>;
+import { KnowledgeRowSchema } from "@cogni/knowledge-store/contracts";
+
+export {
+  type KnowledgeRow,
+  KnowledgeRowSchema,
+} from "@cogni/knowledge-store/contracts";
 
 export const KnowledgeListResponseSchema = z.object({
   items: z.array(KnowledgeRowSchema),
