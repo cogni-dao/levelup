@@ -7,7 +7,10 @@ import {
   rankScore, toWorkItemId, type WorkItem, type WorkItemCommandPort, type WorkItemQueryPort,
 } from "@cogni/work-items";
 import { WorkItemRevisionConflictError } from "@cogni/work-items/adapters/doltgres";
+import { WorkItemDtoSchema as HttpWorkItemDtoSchema } from "@cogni/node-contracts";
 import { createWorkItemQueryImplementation } from "@cogni/shared-ai-tools";
+import { LEVELUP_LOCAL_TOOL_BUNDLE, LEVELUP_SHARED_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
+import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 
 const scores = { goal: { v: 3 }, time: { v: 2 }, unblocks: { v: 3 }, ease: { v: 3 }, confidence: { v: 3 }, agent: { v: 3 },
@@ -65,6 +68,7 @@ describe("shared evaluation capability", () => {
       scored: false,
       limit: 5,
     });
+    expect(HttpWorkItemDtoSchema).toBe(WorkItemDtoSchema);
     const read = result.items[0];
     for (const key of Object.keys(WorkItemDtoSchema.shape)) {
       if (key in toWorkItemDto(item)) expect(read).toHaveProperty(key);
@@ -83,4 +87,14 @@ describe("shared evaluation capability", () => {
       limit: 5,
     });
   });
+  it("compiles published Zod4 and retained local Zod3 tools with their owning runtimes", () => {
+    const tools = [...LEVELUP_LOCAL_TOOL_BUNDLE, ...LEVELUP_SHARED_TOOL_BUNDLE];
+    const bindings = Object.fromEntries(tools.map(({ contract }) => [contract.name, { execute: async () => ({}) }]));
+    const source = createBoundToolSource(LEVELUP_LOCAL_TOOL_BUNDLE, bindings, LEVELUP_SHARED_TOOL_BUNDLE);
+    expect(source.size).toBe(tools.length);
+    const work = source.getBoundTool("core__work_item_query");
+    expect(work?.spec.inputSchema).toMatchObject({ type: "object", properties: { scored: { type: "boolean" } } });
+    for (const { contract } of LEVELUP_LOCAL_TOOL_BUNDLE) expect(source.hasToolId(contract.name)).toBe(true);
+  });
+
 });

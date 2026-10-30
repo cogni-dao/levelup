@@ -16,6 +16,8 @@
  * @internal
  */
 
+import { KnowledgeRowSchema } from "@cogni/node-contracts";
+import { KnowledgeRowSchema as CanonicalKnowledgeRowSchema } from "@cogni/knowledge-store/contracts";
 import { FakeKnowledgeStoreAdapter } from "@cogni/knowledge-store/adapters/fake";
 import { TEST_SESSION_USER_1 } from "@tests/_fakes/ids";
 import { testApiHandler } from "next-test-api-route-handler";
@@ -118,6 +120,8 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
         expect(res.status).toBe(200);
         const body = await res.json();
         expect(body.id).toBe("entry-a");
+        expect(KnowledgeRowSchema).toBe(CanonicalKnowledgeRowSchema);
+        for (const key of Object.keys(CanonicalKnowledgeRowSchema.shape)) expect(body).toHaveProperty(key);
       },
     });
   });

@@ -34,7 +34,7 @@ import {
   LANGGRAPH_CATALOG,
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
-import { createInProcGraphRunner } from "@cogni/shared-langgraph-graphs";
+import { createInProcGraphRunner } from "@cogni/node-template-graphs";
 import { trace } from "@opentelemetry/api";
 import type { Logger } from "pino";
 import { getExecutionScope } from "@/adapters/server/ai/execution-scope";
