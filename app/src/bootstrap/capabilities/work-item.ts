@@ -20,14 +20,12 @@ import type {
 } from "@cogni/shared-ai-tools";
 import type {
   ActorKind,
-  SubjectRef,
-  WorkItem,
   WorkItemCommandPort,
   WorkItemQueryPort,
   WorkItemStatus,
   WorkItemType,
 } from "@cogni/work-items";
-import { rankScore, toWorkItemId } from "@cogni/work-items";
+import { toWorkItemDto as toWorkItemInfo, toWorkItemId } from "@cogni/work-items";
 import { WorkItemPatchConflictError } from "@cogni/shared-ai-tools";
 import type { WorkItemsDoltgresPort } from "@/ports/server";
 
@@ -41,45 +39,6 @@ export interface WorkItemCapabilityDeps {
   readonly backlogWriter?: { readonly store: Pick<WorkItemsDoltgresPort, "patch">; readonly principalId: () => string };
 }
 
-function assigneeId(a: SubjectRef): string {
-  switch (a.kind) {
-    case "user":
-      return a.userId;
-    case "agent":
-      return a.agentId;
-    case "system":
-      return a.serviceId;
-  }
-}
-
-function toWorkItemInfo(item: WorkItem): WorkItemInfo {
-  const evaluationRank = rankScore(item.scores);
-  return {
-    id: item.id,
-    type: item.type,
-    title: item.title,
-    status: item.status,
-    labels: [...item.labels],
-    assignees: item.assignees.map((a) => ({ kind: a.kind, id: assigneeId(a) })),
-    updatedAt: item.updatedAt,
-    revision: item.revision,
-    ...(item.scores !== undefined && { scores: item.scores }),
-    ...(evaluationRank !== undefined && { rankScore: evaluationRank }),
-    ...(item.outcome !== undefined && { outcome: item.outcome }),
-    ...(item.estimate !== undefined && { estimate: item.estimate }),
-    ...(item.parentId !== undefined && { parentId: item.parentId }),
-    ...(item.specRefs !== undefined && { specRefs: [...item.specRefs] }),
-    ...(item.actor !== "either" && { actor: item.actor }),
-    ...(item.priority !== undefined && { priority: item.priority }),
-    ...(item.rank !== undefined && { rank: item.rank }),
-    ...(item.summary !== undefined && { summary: item.summary }),
-    ...(item.projectId !== undefined && { projectId: item.projectId }),
-    ...(item.branch !== undefined && { branch: item.branch }),
-    ...(item.pr !== undefined && { pr: item.pr }),
-    ...(item.blockedBy !== undefined && { blockedBy: item.blockedBy }),
-  };
-}
-
 /**
  * Create a WorkItemCapability backed by hexagonal ports.
  */
@@ -91,6 +50,11 @@ export function createWorkItemCapability(
   return {
     async query(params): Promise<readonly WorkItemInfo[]> {
       const result = await (deps.backlogReader ?? workItemQuery).list({
+        ...(params.sortBy && { sortBy: params.sortBy }),
+        ...(params.sortDirection && { sortDirection: params.sortDirection }),
+        ...(params.labels && { labels: params.labels }),
+        ...(params.labelPrefix && { labelPrefix: params.labelPrefix }),
+        ...(params.scored !== undefined && { scored: params.scored }),
         ...(params.ids && { ids: params.ids.map(toWorkItemId) }),
         ...(params.cursor && { cursor: params.cursor }),
         ...(params.statuses && {
@@ -111,6 +75,11 @@ export function createWorkItemCapability(
 
     async queryPage(params) {
       const result = await (deps.backlogReader ?? workItemQuery).list({
+        ...(params.sortBy && { sortBy: params.sortBy }),
+        ...(params.sortDirection && { sortDirection: params.sortDirection }),
+        ...(params.labels && { labels: params.labels }),
+        ...(params.labelPrefix && { labelPrefix: params.labelPrefix }),
+        ...(params.scored !== undefined && { scored: params.scored }),
         ...(params.ids && { ids: params.ids.map(toWorkItemId) }),
         ...(params.cursor && { cursor: params.cursor }),
         ...(params.statuses && {

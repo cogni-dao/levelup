@@ -25,15 +25,16 @@ import {
   createToolRunner,
 } from "@cogni/ai-core";
 import type { CatalogBoundTool } from "@cogni/ai-tools";
+import type { CatalogBoundTool as SharedCatalogBoundTool } from "@cogni/shared-ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
-  createInProcGraphRunner,
   type GraphResult,
   type InProcGraphRequest,
   LANGGRAPH_CATALOG,
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
+import { createInProcGraphRunner } from "@cogni/shared-langgraph-graphs";
 import { trace } from "@opentelemetry/api";
 import type { Logger } from "pino";
 import { getExecutionScope } from "@/adapters/server/ai/execution-scope";
@@ -98,14 +99,15 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
   readonly providerId = LANGGRAPH_PROVIDER_ID;
   private readonly log: Logger;
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
-  private readonly boundToolMap: ReadonlyMap<string, CatalogBoundTool>;
+  private readonly boundToolMap: ReadonlyMap<string, CatalogBoundTool | SharedCatalogBoundTool
+  >;
 
   constructor(
     private readonly adapter: CompletionUnitAdapter,
     private readonly toolSource: ToolSourcePort,
     private readonly getMcpToolSource: () => Promise<ToolSourcePort | null> = () =>
       Promise.resolve(null),
-    nodeBundle: readonly CatalogBoundTool[] = [],
+    nodeBundle: readonly (CatalogBoundTool | SharedCatalogBoundTool)[] = [],
     catalog: LangGraphCatalog<CreateGraphFn> = LANGGRAPH_CATALOG as LangGraphCatalog<CreateGraphFn>
   ) {
     this.log = makeLogger({ component: "LangGraphInProcProvider" });
@@ -283,7 +285,11 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
         createGraph: entry.graphFactory,
         completionFn,
         createToolExecFn,
-        toolContracts,
+        // LangChain supports local Zod 3 and published Zod 4 schemas. Keep both
+        // originals intact; the public wrapper types describe its canonical major.
+        toolContracts: toolContracts as Parameters<
+          typeof createInProcGraphRunner
+        >[0]["toolContracts"],
         ...(mcpToolSpecs.length > 0 && { mcpToolSpecs }),
         request: runnerRequest,
         ...(req.responseFormat !== undefined && {

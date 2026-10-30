@@ -54,6 +54,7 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import * as entryHandler from "@/app/api/v1/knowledge/[id]/route";
+import * as domainItemHandler from "@/app/api/v1/knowledge/domains/[domain]/route";
 import * as domainsHandler from "@/app/api/v1/knowledge/domains/route";
 import * as graphHandler from "@/app/api/v1/knowledge/graph/route";
 import * as listHandler from "@/app/api/v1/knowledge/route";
@@ -126,8 +127,7 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
     { id: "entry-b", useWhen: null },
   ])("serializes the retrieval trigger for $id at the read boundary", async ({
     id,
-    useWhen,
-  }) => {
+    useWhen }) => {
     const entry = await mockStore.getKnowledge(id);
     if (!entry) throw new Error("Seeded entry is missing");
     const getKnowledge = vi.spyOn(mockStore, "getKnowledge");
@@ -187,5 +187,57 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
         expect(body.domains.map((d: { id: string }) => d.id)).toContain("eng");
       },
     });
+  });
+  it("uses existing bearer auth for domain CRUD and refuses invalid/nonempty/protected deletes", async () => {
+    await mockStore.registerDomain({ id: "scratch", name: "Scratch" });
+    await testApiHandler({
+      appHandler: domainItemHandler,
+      params: { domain: "scratch" },
+      url: "/api/v1/knowledge/domains/scratch",
+      async test({ fetch }) {
+        expect((await fetch({ method: "GET", headers: BEARER })).status).toBe(
+          200
+        );
+        const patch = await fetch({
+          method: "PATCH",
+          headers: { ...BEARER, "content-type": "application/json" },
+          body: JSON.stringify({ name: "Renamed", description: null }),
+        });
+        expect(patch.status).toBe(200);
+        expect(await patch.json()).toMatchObject({
+          id: "scratch",
+          name: "Renamed",
+          description: null,
+        });
+        const invalid = await fetch({
+          method: "PATCH",
+          headers: { ...BEARER, "content-type": "application/json" },
+          body: "{}",
+        });
+        expect(invalid.status).toBe(400);
+        expect(
+          (await fetch({ method: "DELETE", headers: BEARER })).status
+        ).toBe(200);
+        expect((await fetch({ method: "GET", headers: BEARER })).status).toBe(
+          404
+        );
+      },
+    });
+    for (const [domain, errorCode] of [
+      ["eng", "domain_not_empty"],
+      ["meta", "domain_protected"],
+    ]) {
+      await testApiHandler({
+        appHandler: domainItemHandler,
+        params: { domain },
+        url: `/api/v1/knowledge/domains/${domain}`,
+        async test({ fetch }) {
+          const response = await fetch({ method: "DELETE", headers: BEARER });
+          expect(response.status).toBe(409);
+          expect(await response.json()).toMatchObject({ errorCode });
+        },
+      });
+    }
+    expect(await mockStore.getKnowledge("entry-a")).not.toBeNull();
   });
 });
