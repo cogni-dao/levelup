@@ -30,6 +30,11 @@ vi.mock("@/components", () => ({
   ),
 }));
 
+vi.mock("@/features/layout", async () => {
+  const { AppShell } = await import("@/features/layout/components/AppShell");
+  return { AppShell };
+});
+
 vi.mock("@/features/layout/components/AppSidebar", () => ({
   AppSidebar: () => <div data-testid="app-sidebar" />,
 }));
