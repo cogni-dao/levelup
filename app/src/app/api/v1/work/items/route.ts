@@ -24,6 +24,7 @@ import {
   WorkItemsBackendNotReadyError,
   WorkItemScoresInvalidError,
   WorkItemRevisionConflictError,
+  NodeAdminRequiredError,
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
@@ -128,6 +129,7 @@ export const POST = wrapRouteHandlerWithLogging(
     try {
       const created = await createWorkItem(parseResult.data, {
         id: sessionUser.id,
+        walletAddress: sessionUser.walletAddress,
       });
       ctx.log.info(
         { workItemId: created.id, node: created.node },
@@ -137,6 +139,12 @@ export const POST = wrapRouteHandlerWithLogging(
         status: 201,
       });
     } catch (e) {
+      if (e instanceof NodeAdminRequiredError) {
+        return NextResponse.json(
+          { error: e.message, errorCode: e.errorCode, action: e.action },
+          { status: e.status }
+        );
+      }
       if (e instanceof WorkItemScoresInvalidError) return NextResponse.json({ error: "invalid input", errorCode: e.code, issues: e.issues }, { status: 400 });
       if (e instanceof WorkItemRevisionConflictError) return NextResponse.json({ error: "revision_conflict", expectedRevision: e.expectedRevision, currentRevision: e.currentRevision }, { status: 409 });
       if ((e as Error)?.name === "WorkItemWriteOutcomeUnknownError") {

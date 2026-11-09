@@ -20,6 +20,16 @@ import type {
 	WebSearchCapability,
 } from "@cogni/ai-tools";
 import { LEVELUP_LOCAL_TOOL_BUNDLE, LEVELUP_SHARED_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
+import {
+	type GoalsProgress,
+	KpiBindingsSchema,
+	type MetricService,
+} from "@cogni-dao/metrics";
+import {
+	createGoalMetrics,
+	createGoalMetricTools,
+	createGoalProgressReader,
+} from "@/bootstrap/capabilities/goal-metrics";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import {
 	createDefaultRegistries,
@@ -45,6 +55,7 @@ import {
 	createKnowledgeCapability,
 	defaultCanMergeKnowledge,
 	type KnowledgeStorePort,
+	type NodeAdminAuthority,
 	shapeGate,
 } from "@cogni/knowledge-store";
 import {
@@ -142,6 +153,7 @@ import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
+import { createApproversNodeAdminAuthority } from "@/bootstrap/node-admin-gate";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
 import type {
@@ -238,6 +250,9 @@ export interface Container {
 	scheduleRunReader: ScheduleRunReader;
 	/** Metrics capability for AI tools - requires PROMETHEUS_URL to be configured */
 	metricsCapability: MetricsCapability;
+	goalMetrics: MetricService | undefined;
+	/** The node's one goal-progress read; HTTP, SSR and core__goal_progress share it. */
+	goalProgress: () => Promise<GoalsProgress>;
 	/** Web search capability for AI tools - requires TAVILY_API_KEY to be configured */
 	webSearchCapability: WebSearchCapability;
 	/** Repo capability for AI tools - requires COGNI_REPO_PATH */
@@ -246,6 +261,8 @@ export interface Container {
 	toolSource: ToolSourcePort;
 	/** External-agent knowledge contribution service — undefined when DOLTGRES_URL is unset */
 	knowledgeContributionService: ContributionService | undefined;
+	/** GOAL_CHANGE_IS_NODE_ADMIN / P0P1_IS_NODE_ADMIN: this node's one node-admin authority (repo-spec admin wallets). */
+	nodeAdmin: NodeAdminAuthority;
 	/** Direct knowledge store port — exposed for the cookie-only browse endpoint. Undefined when DOLTGRES_URL is unset. */
 	knowledgeStorePort: KnowledgeStorePort | undefined;
 	/** EDO hypothesis-loop capability for the langgraph tool bindings AND the bearer-auth REST routes under /api/v1/edo. Always present (stubs throw when DOLTGRES_URL is unset). */
@@ -328,6 +345,11 @@ let _workflowClientPromise: Promise<{
 export function getContainer(): Container {
 	if (!_container) {
 		_container = createContainer();
+		// Dynamic import avoids a static container/job cycle.
+		if (_container.goalMetrics)
+			void import("@/bootstrap/jobs/metrics-refresh.job").then((job) =>
+				job.startMetricsSyncOnBoot()
+			);
 	}
 	return _container;
 }
@@ -708,6 +730,8 @@ function createContainer(): Container {
 	let knowledgeCapability: KnowledgeCapability;
 	let edoCapability: EdoCapability;
 	let knowledgeContributionService: ContributionService | undefined;
+	let goalMetrics: MetricService | undefined;
+	const nodeAdmin = createApproversNodeAdminAuthority();
 	let knowledgeStorePort: KnowledgeStorePort | undefined;
 	let doltgresWorkItems: WorkItemsDoltgresPort;
 	if (env.DOLTGRES_URL) {
@@ -739,7 +763,37 @@ function createContainer(): Container {
 			sql: doltClient, writerSession: knowledgeWriter,
 		});
 		knowledgeStorePort = knowledgePort;
+		goalMetrics = createGoalMetrics({
+			knowledgeSql: doltClient,
+			observationsSql: serviceDb.$client,
+			environment: env.DEPLOY_ENVIRONMENT ?? "unknown",
+			// Compute receipts and skipped invalid definitions must reach Loki.
+			log: (event) => log.info(event, "metric.event"),
+		});
 		knowledgeCapability = createKnowledgeCapability(knowledgePort);
+		const listGoals =
+			knowledgeCapability.listActiveGoals?.bind(knowledgeCapability);
+		if (listGoals)
+			knowledgeCapability.listActiveGoals = async () => {
+				const goals = await listGoals();
+				return Promise.all(
+					goals.map(async (goal) => {
+						const row = await knowledgePort.getKnowledge(goal.id);
+						// Invalid stored bindings never break the goal list.
+						const parsed = KpiBindingsSchema.safeParse(row?.kpiBindings ?? []);
+						const bindings = parsed.success ? parsed.data : [];
+						return {
+							...goal,
+							kpis:
+								bindings.length && goalMetrics
+									? await goalMetrics.bindings(bindings, {
+											deadline: goal.evaluateAt,
+										})
+									: [],
+						};
+					}),
+				);
+			};
 		const edoResolver = new DoltgresEdoResolverAdapter({
 			sql: doltClient,
 			store: knowledgePort,
@@ -782,6 +836,7 @@ function createContainer(): Container {
 			// reserved for internal `core__knowledge_write` where the caller
 			// controls those fields. See work/projects/proj.knowledge-syntropy.md.
 			gates: [shapeGate],
+			nodeAdmin,
 			...(pushMainOnMerge ? { pushMainOnMerge } : {}),
 		});
 		log.info(
@@ -849,7 +904,21 @@ function createContainer(): Container {
 		vcsCapability: stubVcsCapability,
 		workItemCapability,
 	});
-	const toolSource = createBoundToolSource(LEVELUP_LOCAL_TOOL_BUNDLE, toolBindings, LEVELUP_SHARED_TOOL_BUNDLE);
+	const goalProgress = createGoalProgressReader({
+		metrics: () => goalMetrics,
+		knowledge: () => knowledgeStorePort,
+		// Same fallback as createGoalMetrics, so payload environment == observation scope.
+		environment: env.DEPLOY_ENVIRONMENT ?? "unknown",
+	});
+	const metricTools = createGoalMetricTools({
+		metrics: () => goalMetrics,
+		goalProgress,
+	});
+	const toolSource = createBoundToolSource(
+		LEVELUP_LOCAL_TOOL_BUNDLE,
+		{ ...toolBindings, ...metricTools.bindings },
+		LEVELUP_SHARED_TOOL_BUNDLE
+	);
 
 	// Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
 	const config: ContainerConfig = {
@@ -995,10 +1064,13 @@ function createContainer(): Container {
 		scheduleManager,
 		scheduleRunReader,
 		metricsCapability,
+		goalMetrics,
+		goalProgress,
 		webSearchCapability,
 		repoCapability,
 		toolSource,
 		knowledgeContributionService,
+		nodeAdmin,
 		knowledgeStorePort,
 		edoCapability,
 		threadPersistenceForUser: (userId: UserId) =>
