@@ -64,6 +64,11 @@ export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
     const byId = new Map(claims.items.map((item) => [item.id, item]));
     return { ...result, items: result.items.map((item) => project(item, byId.get(item.id) ?? null)) };
   }
+  async listSummaries(query?: Parameters<WorkItemsDoltgresPort["listSummaries"]>[0]) {
+    return this.content.listSummaries(query);
+  }
+  // Change reasons live in Dolt history of the content table; claims are lease-only.
+  history(id: WorkItemId) { return this.content.history(id); }
   async create(...args: Parameters<WorkItemsDoltgresPort["create"]>) {
     const item = await this.content.create(...args);
     return project(item, await this.legacy.get(item.id));

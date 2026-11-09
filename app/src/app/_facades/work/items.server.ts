@@ -263,6 +263,7 @@ export async function patchWorkItem(
     const patched = await container.doltgresWorkItems.patch(
       {
         id: toWorkItemId(input.id),
+        ...(input.reason !== undefined && { reason: input.reason }),
         ...(input.expectedRevision !== undefined && { expectedRevision: input.expectedRevision }),
         set: dropUndefined(input.set),
       },

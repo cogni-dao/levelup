@@ -45,7 +45,7 @@
     "postgres": "^3.4.5"
   },
   "dependencies": {
-    "@cogni-dao/knowledge-store": "https://github.com/cogni-dao/node-template/releases/download/knowledge-store-v0.9.0/cogni-dao-knowledge-store-0.9.0.tgz",
+    "@cogni-dao/knowledge-store": "https://github.com/cogni-dao/node-template/releases/download/knowledge-store-v0.11.0/cogni-dao-knowledge-store-0.11.0.tgz",
     "@cogni/ai-tools": "workspace:*"
   }
 }
