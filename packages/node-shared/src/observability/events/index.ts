@@ -17,6 +17,8 @@
 // ============================================================================
 
 export const EVENT_NAMES = {
+  METRIC_REFRESH_COMPLETE: "metric.refresh_complete",
+  GOALS_PROGRESS_READ: "goals.progress_read",
   // Bounded work reads (task.0056): one terminal event per /work/summaries or /work/board request.
   WORK_ITEMS_LIST_COMPLETE: "work.items.list_complete",
   SCHEDULE_DETAIL_READ: "schedules.detail_read",

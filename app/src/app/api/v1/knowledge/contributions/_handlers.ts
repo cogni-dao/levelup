@@ -7,12 +7,21 @@
  *   Pulls the framework-agnostic ContributionService from the container, maps
  *   SessionUser → Principal, and translates typed service errors to HTTP statuses.
  * Scope: Operator-side wiring only. Mirrors poly's identical handler set.
- * Invariants: VALIDATE_IO, AUTH_VIA_GETSESSIONUSER, KNOWLEDGE_MERGE_REQUIRES_ADMIN_SESSION.
+ * Invariants: VALIDATE_IO, AUTH_VIA_GETSESSIONUSER, KNOWLEDGE_MERGE_REQUIRES_ADMIN_SESSION,
+ *   GOAL_CHANGE_IS_NODE_ADMIN (story.5101): a merge whose diff touches a `goal-*` row (or a
+ *   goal-retiring edge) additionally requires node admin — enforced in ContributionService.merge
+ *   on raw diff ids at the gated head; mapped here to 403 `authz_denied` / 503 `authz_unavailable`.
  * Side-effects: IO (HTTP response, Doltgres read/write via container service)
  * Links: docs/design/knowledge-contribution-api.md, packages/knowledge-store
  * @internal
  */
 
+import { calculatorShape } from "@cogni-dao/metrics";
+import {
+  displayFits,
+  KpiBindingsSchema,
+  StoredMetricSpecSchema,
+} from "@cogni-dao/metrics/contracts";
 import {
   CitationTargetNotFoundError,
   CitationTypeMismatchError,
@@ -23,8 +32,10 @@ import {
   ContributionStateError,
   DomainNotRegisteredError,
   EmptyKnowledgePatchError,
+  HypothesisMissingEvaluateAtError,
   KnowledgeBusyError,
   KnowledgeGateError,
+  NodeAdminRequiredError,
   type PrincipalAuthSource,
   sessionUserToPrincipal,
 } from "@cogni/knowledge-store";
@@ -82,6 +93,15 @@ function mapError(e: unknown): NextResponse {
     return NextResponse.json({ error: e.message }, { status: 400 });
   if (e instanceof EmptyKnowledgePatchError)
     return NextResponse.json({ error: e.message }, { status: 400 });
+  // GOAL_CHANGE_IS_NODE_ADMIN — refused before any side effect.
+  if (e instanceof NodeAdminRequiredError)
+    return NextResponse.json(
+      { error: e.message, errorCode: e.errorCode, action: e.action },
+      { status: e.status }
+    );
+  // HYPOTHESIS_HAS_EVALUATE_AT — a hypothesis or goal write without evaluateAt.
+  if (e instanceof HypothesisMissingEvaluateAtError)
+    return NextResponse.json({ error: e.message }, { status: 400 });
   // A cite/EDO edit whose target resolves on neither the branch nor main, or
   // whose edge type doesn't match the cited entry_type, is a client error â
   // never a 500 (bug.5024). The cross-plane (main âª branch) resolution lives in
@@ -130,6 +150,16 @@ export async function handleCreate(
       { status: 400 }
     );
 
+  for (const edit of parsed.data.edits ?? []) {
+    if (edit.op !== "insert" && edit.op !== "update") continue;
+    const entry = edit.entry;
+    if (entry.metricSpec != null) {
+      const invalid = validateMetricSpec(entry.metricSpec, entry.id ?? ("targetRowId" in edit ? edit.targetRowId : "metric"), entry.title);
+      if (invalid) return invalid;
+    }
+    if (entry.kpiBindings != null && !KpiBindingsSchema.safeParse(entry.kpiBindings).success) return NextResponse.json({ error: "invalid KPI bindings" }, { status: 400 });
+    if (entry.entryType === "hypothesis" && Array.isArray(entry.kpiBindings) && entry.kpiBindings.length && !entry.kpiBindings.every(binding => binding.evaluationAt && binding.baselineObservationId)) return NextResponse.json({ error: "hypothesis KPI bindings require a fixed evaluation and baseline observation" }, { status: 422 });
+  }
   const principal = sessionUserToPrincipal(sessionUser, authSource(request));
   const createBody = {
     message: parsed.data.message,
@@ -236,6 +266,16 @@ export async function handleAppendCommit(
       { status: 400 }
     );
 
+  for (const edit of parsed.data.edits ?? []) {
+    if (edit.op !== "insert" && edit.op !== "update") continue;
+    const entry = edit.entry;
+    if (entry.metricSpec != null) {
+      const invalid = validateMetricSpec(entry.metricSpec, entry.id ?? ("targetRowId" in edit ? edit.targetRowId : "metric"), entry.title);
+      if (invalid) return invalid;
+    }
+    if (entry.kpiBindings != null && !KpiBindingsSchema.safeParse(entry.kpiBindings).success) return NextResponse.json({ error: "invalid KPI bindings" }, { status: 400 });
+    if (entry.entryType === "hypothesis" && Array.isArray(entry.kpiBindings) && entry.kpiBindings.length && !entry.kpiBindings.every(binding => binding.evaluationAt && binding.baselineObservationId)) return NextResponse.json({ error: "hypothesis KPI bindings require a fixed evaluation and baseline observation" }, { status: 422 });
+  }
   const principal = sessionUserToPrincipal(sessionUser, authSource(request));
   try {
     const commit = await svc.appendCommit({
@@ -329,15 +369,34 @@ export async function handleMerge(
 
   const principal = sessionUserToPrincipal(sessionUser, authSource(request));
   try {
+    // GOAL_CHANGE_IS_NODE_ADMIN is enforced inside ContributionService.merge
+    // (raw diff ids + expected head); this passes the acting wallet.
     const result = await svc.merge({
       principal,
       contributionId,
+      actor: {
+        userId: sessionUser.id,
+        walletAddress: sessionUser.walletAddress ?? null,
+      },
       ...(parsed.data.confidencePct != null
         ? { confidencePct: parsed.data.confidencePct }
         : {}),
     });
     return NextResponse.json({ contributionId, ...result });
   } catch (e) {
+    if (e instanceof NodeAdminRequiredError) {
+      // Server-side only: the raw authority reason never reaches the client body.
+      getContainer().log.warn(
+        {
+          errorCode: e.errorCode,
+          reason: e.reason,
+          action: e.action,
+          contributionId,
+          userId: sessionUser.id,
+        },
+        "knowledge.contributions.merge_node_admin_refused"
+      );
+    }
     return mapError(e);
   }
 }
@@ -380,4 +439,41 @@ export async function handleClose(
   } catch (e) {
     return mapError(e);
   }
+}
+
+/** A stored metric spec must parse strictly, name a registered calculator and carry a display its unit can honour. */
+function validateMetricSpec(
+  stored: unknown,
+  id: string,
+  title: string
+): NextResponse | null {
+  const parsed = StoredMetricSpecSchema.safeParse(stored);
+  if (!parsed.success)
+    return NextResponse.json(
+      { error: "invalid metric definition", issues: parsed.error.issues },
+      { status: 400 }
+    );
+  const { display, ...spec } = parsed.data;
+  const registry = getContainer().goalMetrics?.registry;
+  try {
+    registry?.validate({ id, title, revision: "proposed", spec });
+  } catch {
+    return NextResponse.json(
+      { error: "unsupported calculator or parameters" },
+      { status: 422 }
+    );
+  }
+  if (
+    display &&
+    registry &&
+    !displayFits(
+      display,
+      calculatorShape(registry.get(spec.calculatorId), spec.params).unit
+    )
+  )
+    return NextResponse.json(
+      { error: "display does not fit the metric unit (slo needs %)" },
+      { status: 422 }
+    );
+  return null;
 }

@@ -15,6 +15,9 @@ const baselineIds = new Set([
   "core__edo_hypothesize",
   "core__edo_decide",
   "core__edo_record_outcome", "core__get_current_time",
+  // Goal KPIs: contracts and bindings come from the published ai-tools and metrics releases.
+  "core__goal_progress", "core__metric_list", "core__metric_read",
+  "core__metric_history", "core__metric_compute",
 ]);
 const localById = new Map(CORE_TOOL_BUNDLE.map((tool) => [tool.contract.name, tool]));
 export const LEVELUP_SHARED_TOOL_BUNDLE = SHARED_TOOL_BUNDLE.filter((tool) => baselineIds.has(tool.contract.name)).map((shared) => {
