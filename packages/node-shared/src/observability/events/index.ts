@@ -17,6 +17,8 @@
 // ============================================================================
 
 export const EVENT_NAMES = {
+  // Bounded work reads (task.0056): one terminal event per /work/summaries or /work/board request.
+  WORK_ITEMS_LIST_COMPLETE: "work.items.list_complete",
   SCHEDULE_DETAIL_READ: "schedules.detail_read",
   SCHEDULE_HISTORY_READ: "schedules.history_read",
   AI_THREAD_READ: "ai.thread_read",
