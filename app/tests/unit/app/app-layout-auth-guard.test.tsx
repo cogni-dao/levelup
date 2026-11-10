@@ -30,8 +30,16 @@ vi.mock("@/components", () => ({
   ),
 }));
 
-vi.mock("@/features/layout", () => ({
+vi.mock("@/features/layout", async () => {
+  const { AppShell } = await import("@/features/layout/components/AppShell");
+  return { AppShell };
+});
+
+vi.mock("@/features/layout/components/AppSidebar", () => ({
   AppSidebar: () => <div data-testid="app-sidebar" />,
+}));
+
+vi.mock("@/features/layout/components/AppTopBar", () => ({
   AppTopBar: () => <div data-testid="app-topbar" />,
 }));
 

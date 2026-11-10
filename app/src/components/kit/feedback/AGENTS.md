@@ -5,6 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
+- **Last reviewed:** 2026-11-02
 - **Status:** stable
 - **Parent:** [components/kit](../../../AGENTS.md)
 
@@ -23,7 +24,7 @@ Provides reusable feedback UI components for error states, loading indicators, a
 ```json
 {
   "layer": "components",
-  "may_import": ["shared", "types"],
+  "may_import": ["shared", "types", "styles"],
   "must_not_import": [
     "app",
     "features",
@@ -37,8 +38,8 @@ Provides reusable feedback UI components for error states, loading indicators, a
 
 ## Public Surface
 
-- **Exports (via index.ts and ../index.ts):** ErrorAlert
-- **Files considered API:** ErrorAlert.tsx, index.ts
+- **Exports (via components/index.ts):** BrainLoading, ErrorAlert and other feedback components
+- **Files considered API:** BrainLoading.tsx, ErrorAlert.tsx, components/index.ts
 
 ## Responsibilities
 
@@ -72,12 +73,12 @@ import { ErrorAlert } from "@/components";
 
 ## Dependencies
 
-- **Internal:** @/shared/util/cn, @/components/kit/inputs (Button)
+- **Internal:** @/shared/util/cn, @/components/kit/inputs (Button), @/styles/ui
 - **External:** react, lucide-react
 
 ## Change Protocol
 
-- Update index.ts and parent index.ts when adding component exports
+- Update components/index.ts when adding component exports
 - Prop changes are breaking (require consumer updates)
 - Keep components domain-agnostic (presenters receive primitive props)
 
