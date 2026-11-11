@@ -18,13 +18,15 @@ type KnowledgeEntryWithKpis = KnowledgeRow & {
 };
 
 export async function fetchKnowledgeEntry(
-  id: string
+  id: string,
+  signal?: AbortSignal
 ): Promise<KnowledgeEntryWithKpis> {
   const response = await fetch(`/api/v1/knowledge/${encodeURIComponent(id)}`, {
     method: "GET",
     headers: { "Content-Type": "application/json" },
     credentials: "same-origin",
     cache: "no-store",
+    ...(signal ? { signal } : {}),
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({
