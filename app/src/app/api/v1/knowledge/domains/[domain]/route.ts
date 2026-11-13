@@ -19,48 +19,22 @@ export const runtime = "nodejs";
 
 type DomainContext = { params: Promise<{ domain: string }> };
 
-type DomainRouteHandler = Parameters<
-  typeof wrapRouteHandlerWithLogging<DomainContext>
->[1];
-
-const handleItem: DomainRouteHandler = async (
-  ctx,
-  request,
-  sessionUser,
-  context
-) => {
-  if (!context) throw new Error("context required for dynamic routes");
-  const { domain } = await context.params;
-  const response = await handleDomainItem(request, domain, sessionUser);
-  ctx.log.info(
-    { domainId: domain, status: response.status },
-    "knowledge.domains.item_complete"
+function itemRoute(routeId: string) {
+  return wrapRouteHandlerWithLogging<DomainContext>(
+    { routeId, auth: { mode: "required", getSessionUser } },
+    async (ctx, request, sessionUser, context) => {
+      if (!context) throw new Error("context required for dynamic routes");
+      const { domain } = await context.params;
+      const response = await handleDomainItem(request, domain, sessionUser);
+      ctx.log.info(
+        { domainId: domain, status: response.status },
+        "knowledge.domains.item_complete"
+      );
+      return response;
+    }
   );
-  return response;
-};
+}
 
-// One wrapper per method, each route id literally beside its door: the same-door enumeration test reads them.
-export const GET = wrapRouteHandlerWithLogging<DomainContext>(
-  {
-    routeId: "knowledge.domains.get",
-    sameDoor: "knowledge.read",
-    auth: { mode: "required", getSessionUser },
-  },
-  handleItem
-);
-
-export const PATCH = wrapRouteHandlerWithLogging<DomainContext>(
-  {
-    routeId: "knowledge.domains.update",
-    auth: { mode: "required", getSessionUser },
-  },
-  handleItem
-);
-
-export const DELETE = wrapRouteHandlerWithLogging<DomainContext>(
-  {
-    routeId: "knowledge.domains.delete",
-    auth: { mode: "required", getSessionUser },
-  },
-  handleItem
-);
+export const GET = itemRoute("knowledge.domains.get");
+export const PATCH = itemRoute("knowledge.domains.update");
+export const DELETE = itemRoute("knowledge.domains.delete");

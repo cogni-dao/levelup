@@ -26,11 +26,6 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // Fresh fake store per test (reassigned in beforeEach); the container mock
 // hands the current instance to every route. Lazy factory => reads latest value.
 let mockStore: FakeKnowledgeStoreAdapter;
-// The real route door over a fake SQL tag: answers the role lookup from `roles` ("<principal>|<scope>").
-const grants = vi.hoisted(() => ({
-  roles: new Set<string>(),
-  authority: undefined as unknown,
-}));
 
 vi.mock("@/bootstrap/container", () => ({
   getContainer: vi.fn(() => ({
@@ -49,7 +44,6 @@ vi.mock("@/bootstrap/container", () => ({
     clock: { now: vi.fn(() => new Date("2026-01-01T00:00:00Z")) },
     config: { unhandledErrorPolicy: "rethrow" },
     knowledgeStorePort: mockStore,
-    agentAuthority: grants.authority,
   })),
 }));
 
@@ -61,11 +55,6 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn().mockResolvedValue(TEST_SESSION_USER_1),
 }));
 
-import { LEVELUP_CORE_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
-import {
-  type AgentAuthoritySql,
-  createAgentToolAuthority,
-} from "@/bootstrap/agent-authority";
 import * as entryHandler from "@/app/api/v1/knowledge/[id]/route";
 import * as domainItemHandler from "@/app/api/v1/knowledge/domains/[domain]/route";
 import * as domainsHandler from "@/app/api/v1/knowledge/domains/route";
@@ -100,33 +89,9 @@ async function seedStore(store: FakeKnowledgeStoreAdapter) {
   });
 }
 
-function fakeSql(): AgentAuthoritySql {
-  const tag = (async (strings: TemplateStringsArray, ...values: unknown[]) =>
-    strings.join("?").includes("FROM agent_roles") &&
-    grants.roles.has(`${values[0]}|${values[1]}`)
-      ? [{ ok: 1 }]
-      : []) as unknown as AgentAuthoritySql;
-  (tag as unknown as { begin: unknown }).begin = async (
-    fn: (t: unknown) => Promise<unknown>
-  ) => fn(tag);
-  return tag;
-}
-
-describe("knowledge read routes — KNOWLEDGE_READ_NEEDS_GRANT", () => {
+describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
-    // clearAllMocks keeps the default session user (no `via`: the strict bearer branch).
-    grants.roles = new Set([`${TEST_SESSION_USER_1.id}|knowledge:read`]);
-    const noop = () => undefined;
-    const quiet = { info: noop, warn: noop, error: noop, debug: noop };
-    grants.authority = createAgentToolAuthority({
-      sql: fakeSql(),
-      nodeAdmin: {
-        check: async () => ({ ok: false, errorCode: "authz_denied" }),
-      },
-      log: quiet as never,
-      toolBundle: LEVELUP_CORE_TOOL_BUNDLE as never,
-    });
     mockStore = new FakeKnowledgeStoreAdapter();
     await seedStore(mockStore);
   });
@@ -278,18 +243,5 @@ describe("knowledge read routes — KNOWLEDGE_READ_NEEDS_GRANT", () => {
       });
     }
     expect(await mockStore.getKnowledge("entry-a")).not.toBeNull();
-  });
-
-  it("a bearer agent without the knowledge:read role gets 403 policy_denied before any read", async () => {
-    grants.roles = new Set();
-    await testApiHandler({
-      appHandler: listHandler,
-      url: "/api/v1/knowledge",
-      async test({ fetch }) {
-        const res = await fetch({ method: "GET", headers: BEARER });
-        expect(res.status).toBe(403);
-        expect((await res.json()).error).toBe("policy_denied");
-      },
-    });
   });
 });

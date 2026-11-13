@@ -232,20 +232,6 @@
       "when": 1794259149210,
       "tag": "0032_slow_odin",
       "breakpoints": true
-    },
-    {
-      "idx": 33,
-      "version": "7",
-      "when": 1794530084757,
-      "tag": "0033_agent_authority",
-      "breakpoints": true
-    },
-    {
-      "idx": 34,
-      "version": "7",
-      "when": 1794546527013,
-      "tag": "0034_agent_ownership_personal_grants",
-      "breakpoints": true
     }
   ]
 }
