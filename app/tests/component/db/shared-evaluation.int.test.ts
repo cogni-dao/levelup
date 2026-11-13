@@ -99,9 +99,9 @@ describe("Doltgres 0.57.3 work-item acceptance", () => {
     const scores = { goal: { v: 3 }, time: { v: 2 }, unblocks: { v: 3 }, ease: { v: 4, ev: "https://example.org/proof?q=1#section" }, confidence: { v: 3 }, agent: { v: 3 } };
     try {
       const created = await adapter.create({ id, type: "task", title: "Shared evaluation composition" }, owner);
-      const scored = await adapter.patch({ id, expectedRevision: created.revision, set: { scores } }, collaborator);
+      const scored = await adapter.patch({ id, expectedRevision: created.revision, reason: "score the baseline", set: { scores } }, collaborator);
       expect(scored.scores).toEqual(scores);
-      await expect(adapter.patch({ id, expectedRevision: created.revision, set: { scores: null } }, collaborator)).rejects.toMatchObject({ name: "WorkItemRevisionConflictError" });
+      await expect(adapter.patch({ id, expectedRevision: created.revision, reason: "clear the baseline scores", set: { scores: null } }, collaborator)).rejects.toMatchObject({ name: "WorkItemRevisionConflictError" });
       expect(await adapter.get(id)).toMatchObject({ title: "Shared evaluation composition", scores, revision: scored.revision });
       const claimed = await adapter.claim({ id, runId: "baseline-run", command: "/baseline", principalId: owner });
       expect(claimed.claimedByRun).toBe("baseline-run");
@@ -115,7 +115,7 @@ describe("Doltgres 0.57.3 work-item acceptance", () => {
       const released = await adapter.release({ id, runId: "baseline-run", principalId: owner });
       expect(released.claimedByRun).toBeUndefined();
       expect(released.scores).toEqual(scores);
-      const cleared = await adapter.patch({ id, expectedRevision: released.revision, set: { scores: null } }, collaborator);
+      const cleared = await adapter.patch({ id, expectedRevision: released.revision, reason: "clear the baseline scores", set: { scores: null } }, collaborator);
       expect(cleared.scores).toBeUndefined();
       await expect(adapter.delete(id, owner)).resolves.toBe(true);
     } finally {

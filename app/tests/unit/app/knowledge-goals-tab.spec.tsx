@@ -222,9 +222,14 @@ describe("Knowledge metric evidence mount", () => {
       </QueryClientProvider>
     );
     await screen.findByText(/Linked immutable evidence/);
-    expect(fetchMock.mock.calls.map(([u]) => u)).toEqual([
-      "/api/v1/metrics/work",
-      `/api/v1/metrics/work/observations/${id}`,
-    ]);
+    // The published evidence view also reads the goals chain for its card (metrics 0.14 / kb-ui 0.13).
+    const urls = fetchMock.mock.calls.map(([u]) => u);
+    expect(urls).toEqual(
+      expect.arrayContaining([
+        "/api/v1/metrics/work",
+        `/api/v1/metrics/work/observations/${id}`,
+      ])
+    );
+    expect(urls.every((u) => u.startsWith("/api/v1/metrics/"))).toBe(true);
   });
 });
