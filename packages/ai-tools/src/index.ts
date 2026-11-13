@@ -382,6 +382,5 @@ export type {
   ToolContract,
   ToolErrorCode,
   ToolImplementation,
-  ToolRequires,
   ToolResult,
 } from "./types";

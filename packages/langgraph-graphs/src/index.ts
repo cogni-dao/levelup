@@ -20,7 +20,6 @@ export {
   LANGGRAPH_CATALOG,
   LANGGRAPH_GRAPH_IDS,
   LANGGRAPH_PROVIDER_ID,
-  NODE_AI_PRINCIPAL,
   type LangGraphCatalogKeys,
   type LangGraphGraphId,
 } from "./catalog";
