@@ -11,6 +11,7 @@
  */
 
 import { EVENT_NAMES as NODE_SHARED_EVENT_NAMES } from "@cogni/node-shared";
+import { logEvent as logSharedEvent } from "./server";
 
 // App-local event registry: the shared registry plus node-local events.
 export const EVENT_NAMES = {
@@ -22,9 +23,26 @@ export const EVENT_NAMES = {
   // /admin/payments money-plane snapshot: one terminal event per page read
   // (outcome success|error, durationMs, worst grade, per-plane grade enums).
   MONEY_PLANE_SNAPSHOT: "money_plane.snapshot",
+  // GET /api/v1/work/items/{id}/expectations: one terminal event per read (outcome, durationMs, errorCode).
+  WORK_EXPECTATIONS_READ: "work.expectations.read",
 } as const;
 
 export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
+
+// Extend the shared helper's registry boundary for app-local events.
+export function logEvent(
+  logger: Parameters<typeof logSharedEvent>[0],
+  eventName: EventName,
+  fields: Parameters<typeof logSharedEvent>[2],
+  message?: string
+): void {
+  logSharedEvent(
+    logger,
+    eventName as Parameters<typeof logSharedEvent>[1],
+    fields,
+    message
+  );
+}
 
 // --- Extracted: events, context, client (from @cogni/node-shared) ---
 // NOTE: logEvent/logRequestWarn/etc. come through ./server (which re-exports from @cogni/node-shared)

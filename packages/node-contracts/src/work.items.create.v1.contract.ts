@@ -16,9 +16,13 @@
  * @internal
  */
 
+import { WorkItemMovesInputSchema } from "@cogni/work-items";
 import { z } from "zod";
 
-import { WorkItemDtoSchema, WorkItemScoresInputSchema } from "./work.items.list.v1.contract";
+import {
+  WorkItemDtoSchema,
+  WorkItemScoresInputSchema,
+} from "./work.items.list.v1.contract";
 
 const SubjectRefSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("user"), userId: z.string() }),
@@ -61,7 +65,9 @@ export const workItemsCreateOperation = {
     priority: z.number().int().min(0).max(99).optional(),
     rank: z.number().int().optional(),
     estimate: z.number().int().optional(),
-        scores: WorkItemScoresInputSchema.nullable().optional(),
+    scores: WorkItemScoresInputSchema.optional(),
+    // story.0033: a new item names the metrics it moves when it is filed. The server pins each baseline.
+    moves: WorkItemMovesInputSchema.optional(),
     labels: z.array(z.string()).optional(),
     specRefs: z.array(z.string()).optional(),
     assignees: z.array(SubjectRefSchema).optional(),

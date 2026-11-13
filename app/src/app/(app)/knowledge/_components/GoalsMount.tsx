@@ -4,7 +4,7 @@
 /**
  * Module: `@app/(app)/knowledge/_components/GoalsMount`
  * Purpose: This node's mount of the Goals capability published by `@cogni/knowledge-base-ui/goals` (task.0062): the board, the measurement evidence and the Goals tab badge read.
- * Scope: Composition only. The package owns the board, chart, range control, evidence views, read client and poll contract. The node supplies one host (`NODE_GOALS_HOST`: the package-default cookie-session client at `/api/v1/metrics`, Next's `Link` for client navigation) and the `?observation=` URL value. A fork that needs another client, `init`, `queryKeyPrefix` or `hrefs` changes only `NODE_GOALS_HOST`.
+ * Scope: Composition only. The package owns the board, chart, range control, evidence views, read client and poll contract. The node supplies one host (`NODE_GOALS_HOST` in `(app)/_components/goals-host.ts`: the package-default cookie-session client at `/api/v1/metrics`, Next's `Link` for client navigation) and the `?observation=` URL value. A fork that needs another client, `init`, `queryKeyPrefix` or `hrefs` changes only `NODE_GOALS_HOST`.
  * Invariants: ONE_CACHE_ENTRY (every component here, and the Knowledge dashboard that calls the badge hook, sits under `KnowledgeGoalsProvider`, so the board and the badge share one client and one key prefix); no Goals markup, formatting or fetching lives in the app.
  * Side-effects: none beyond the package's GET reads
  * Links: task.0062, packages/knowledge-base-ui/AGENTS.md
@@ -16,18 +16,15 @@
 import {
   GoalsBoard,
   type GoalsBoardProps,
-  type GoalsHostOptions,
   GoalsProvider,
   MetricEvidence,
   type UseGoalsProgressOptions,
   useGoalsProgress,
 } from "@cogni/knowledge-base-ui/goals";
-import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 
-/** The node's single Goals host. Module-level so every provider shares the same identity. */
-export const NODE_GOALS_HOST: GoalsHostOptions = { LinkComponent: Link };
+import { NODE_GOALS_HOST } from "../../_components/goals-host";
 
 export function KnowledgeGoalsProvider({
   children,

@@ -60,6 +60,7 @@ import {
 } from "@cogni/knowledge-store";
 import {
 	buildDoltgresClient,
+	createDoltgresEntryResolver,
 	createDoltgresPusher,
 	DoltgresEdoResolverAdapter,
 	DoltgresKnowledgeContributionAdapter,
@@ -148,11 +149,13 @@ import {
 	createMetricsCapability,
 	derivePrometheusQueryUrl,
 } from "@/bootstrap/capabilities/metrics";
+import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
 import { createRepoCapability } from "@/bootstrap/capabilities/repo";
 import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
+import { createMoveMetricPorts } from "@/bootstrap/capabilities/work-item-moves";
 import { createApproversNodeAdminAuthority } from "@/bootstrap/node-admin-gate";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
@@ -710,6 +713,12 @@ function createContainer(): Container {
 	const workItemAdapter = new MarkdownWorkItemAdapter(
 		env.COGNI_REPO_ROOT ?? "/nonexistent",
 	);
+	// story.0033: the work-items `moves` ports over this node's metrics service.
+	// `goalMetrics` and `knowledgeStorePort` are assigned below and read only at call time.
+	const moveMetrics = createMoveMetricPorts(
+		() => goalMetrics,
+		() => knowledgeStorePort,
+	);
 
 	// ScheduleCapability for AI tools (reads actorUserId from ALS at invocation time)
 	const scheduleCapability = createScheduleCapability({
@@ -751,6 +760,11 @@ function createContainer(): Container {
 		// imported legacy range below 5000.
 		doltgresWorkItems = new DoltgresLevelUpWorkItemAdapter(workItemsClient, log, {
 			recreateClient: createWorkItemsClient, legacyClient: createWorkItemsClient(),
+			// task.0086: pins a patch's cites to commits with lock-free reads on the
+			// knowledge pool, never on the writer connection that holds the lock.
+			entryResolver: createDoltgresEntryResolver(doltClient),
+			// story.0033: a `moves` entry pins the metric's latest good observation as its baseline.
+			metricBaseline: moveMetrics.baselines,
 		});
 		const createKnowledgeBranchClient = () => buildDoltgresClient({
 			connectionString: env.DOLTGRES_URL as string,
@@ -882,6 +896,10 @@ function createContainer(): Container {
 	const workItemCapability = createWorkItemCapability({
 		workItemQuery: workItemAdapter,
 		workItemCommand: workItemAdapter,
+		moveReadings: moveMetrics.readings,
+		// task.0118: first page of an item's citation links, the same read the UI and the route use.
+		links: createCitationLinksPort(() => knowledgeStorePort),
+		log: (event) => log.warn(event, "work.items.envelope_degraded"),
 		backlogReader: doltgresWorkItems,
 		backlogWriter: {
 			store: doltgresWorkItems,
