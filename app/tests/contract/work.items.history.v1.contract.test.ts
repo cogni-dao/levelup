@@ -5,7 +5,7 @@
  * Module: `@tests/contract/work.items.history.v1.contract`
  * Purpose: Validates the patch `reason` and the re-exported history operations (story.0023).
  * Scope: Pure Zod schema validation. The history logic is owned and tested by the packages.
- * Invariants: reason is one line of 1-512 chars; both history operations are exported by node-contracts.
+ * Invariants: reason is required: one line of 1-240 chars, at most 25 words; both history operations are exported by node-contracts.
  * Side-effects: none
  * Links: packages/node-contracts/src/history.v1.contract.ts
  * @internal
@@ -30,14 +30,14 @@ describe("work.items.patch.v1 reason", () => {
     expect(parsed.reason).toBe("why it changed");
   });
 
-  it("stays optional", () => {
+  it("is required (task.0086)", () => {
     expect(
       workItemsPatchOperation.input.safeParse({ id: "task.0001", set }).success
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("rejects an empty reason and one over 512 characters", () => {
-    for (const reason of ["", "x".repeat(513)]) {
+  it("rejects an empty reason and one over 240 characters", () => {
+    for (const reason of ["", "x".repeat(241)]) {
       expect(
         workItemsPatchOperation.input.safeParse({ id: "task.0001", reason, set })
           .success

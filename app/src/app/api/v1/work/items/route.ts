@@ -15,6 +15,7 @@ import {
   workItemsCreateOperation,
   workItemsListOperation,
 } from "@cogni/node-contracts";
+import { workItemWriteErrorResponse } from "@cogni/work-items";
 import { NextResponse } from "next/server";
 
 import {
@@ -22,8 +23,6 @@ import {
   InvalidCursorError,
   listWorkItems,
   WorkItemsBackendNotReadyError,
-  WorkItemScoresInvalidError,
-  WorkItemRevisionConflictError,
   NodeAdminRequiredError,
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -76,12 +75,6 @@ export const GET = wrapRouteHandlerWithLogging(
     try {
       result = await listWorkItems(input);
     } catch (e) {
-      if (e instanceof WorkItemScoresInvalidError) return NextResponse.json({ error: "invalid input", errorCode: e.code, issues: e.issues }, { status: 400 });
-      if (e instanceof WorkItemRevisionConflictError) return NextResponse.json({ error: "revision_conflict", expectedRevision: e.expectedRevision, currentRevision: e.currentRevision }, { status: 409 });
-      if ((e as Error)?.name === "WorkItemWriteOutcomeUnknownError") {
-        const unknown = e as { code: string; receipt: { lookup: unknown } };
-        return NextResponse.json({ error: unknown.code, retryable: false, lookup: unknown.receipt.lookup }, { status: 503 });
-      }
       if (e instanceof InvalidCursorError) {
         return NextResponse.json({ error: "invalid cursor" }, { status: 400 });
       }
@@ -102,7 +95,9 @@ export const GET = wrapRouteHandlerWithLogging(
  *
  * Server allocates an ID in this node's own store. Author is derived from
  * `getSessionUser` and embedded in
- * the dolt_log commit message (AUTHOR_ATTRIBUTED).
+ * the dolt_log commit message (AUTHOR_ATTRIBUTED). `moves` (story.0033): an unknown or
+ * deprecated new metric id is HTTP 400 `cite_unresolved` at `moves`; a baseline failure
+ * is HTTP 503 `metric_baseline_unavailable`.
  */
 export const POST = wrapRouteHandlerWithLogging(
   { routeId: "work.items.create", auth: { mode: "required", getSessionUser } },
@@ -145,11 +140,11 @@ export const POST = wrapRouteHandlerWithLogging(
           { status: e.status }
         );
       }
-      if (e instanceof WorkItemScoresInvalidError) return NextResponse.json({ error: "invalid input", errorCode: e.code, issues: e.issues }, { status: 400 });
-      if (e instanceof WorkItemRevisionConflictError) return NextResponse.json({ error: "revision_conflict", expectedRevision: e.expectedRevision, currentRevision: e.currentRevision }, { status: 409 });
-      if ((e as Error)?.name === "WorkItemWriteOutcomeUnknownError") {
-        const unknown = e as { code: string; receipt: { lookup: unknown } };
-        return NextResponse.json({ error: unknown.code, retryable: false, lookup: unknown.receipt.lookup }, { status: 503 });
+      // The package owns every write-contract answer (scores, reason, cites, moves, revision
+      // conflict, write outcome unknown, resolver and baseline failures) and matches by name.
+      const mapped = workItemWriteErrorResponse(e, "create");
+      if (mapped) {
+        return NextResponse.json(mapped.body, { status: mapped.status });
       }
       if (e instanceof WorkItemsBackendNotReadyError) {
         return NextResponse.json({ error: e.message }, { status: 503 });

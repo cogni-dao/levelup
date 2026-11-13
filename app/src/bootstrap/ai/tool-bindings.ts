@@ -72,9 +72,11 @@ import {
   createKnowledgeSearchImplementation,
   createKnowledgeWriteImplementation,
   createWorkItemQueryImplementation,
+  createWorkItemReadImplementation,
   createWorkItemTransitionImplementation,
   GOAL_LIST_NAME,
   getCurrentTimeImplementation,
+  WORK_ITEM_READ_NAME,
   type WorkItemCapability,
 } from "@cogni/shared-ai-tools";
 
@@ -203,6 +205,12 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     }) as AnyToolImplementation,
 
     [WORK_ITEM_QUERY_NAME]: createWorkItemQueryImplementation({
+      workItemCapability: deps.workItemCapability,
+      nodePublicOrigin: deps.nodePublicOrigin,
+    }) as AnyToolImplementation,
+
+    // task.0118: the single-item envelope (moves → metric → KPI → goal chain, optional links).
+    [WORK_ITEM_READ_NAME]: createWorkItemReadImplementation({
       workItemCapability: deps.workItemCapability,
       nodePublicOrigin: deps.nodePublicOrigin,
     }) as AnyToolImplementation,
