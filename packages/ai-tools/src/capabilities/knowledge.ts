@@ -9,7 +9,7 @@
  *   - AUTH_VIA_CAPABILITY_INTERFACE: Tools receive knowledge access via this capability, not DSNs.
  *   - CONFIDENCE_DEFAULTS: draft=30, verified=80, hardened=95.
  * Side-effects: none
- * Links: docs/spec/knowledge-data-plane.md
+ * Links: https://github.com/cogni-dao/cogni/blob/2321821e61dd12aa0cf75d235bd668ff65739109/docs/spec/knowledge-data-plane.md
  * @public
  */
 
