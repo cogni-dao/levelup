@@ -33,6 +33,7 @@ import type {
 } from "@cogni/work-items";
 import type {
   EnvelopeDegradedEvent,
+  ItemArtifactsPort,
   ItemLinksPort,
   MoveReadingPort,
 } from "@cogni/work-items";
@@ -61,6 +62,8 @@ export interface WorkItemCapabilityDeps {
   readonly moveReadings?: MoveReadingPort | undefined;
   /** First page of an item's citation links (`read` with `includeLinks`); absent reads `unavailable`. */
   readonly links?: ItemLinksPort | undefined;
+  /** The latest artifact of each kind (task.0028); absent: the item reads without `artifacts`. */
+  readonly artifacts?: ItemArtifactsPort | undefined;
   /** One event per degraded envelope part (chain or links). */
   readonly log?: ((event: EnvelopeDegradedEvent) => void) | undefined;
   readonly backlogWriter?: { readonly store: Pick<WorkItemsDoltgresPort, "patch">; readonly principalId: () => string };
@@ -127,7 +130,7 @@ export function createWorkItemCapability(
       // ONE_COMPOSITION: the same `composeItemEnvelope` the HTTP facade calls.
       return composeItemEnvelope(
         item,
-        { readings: deps.moveReadings, links: deps.links, log: deps.log },
+        { readings: deps.moveReadings, links: deps.links, artifacts: deps.artifacts, log: deps.log },
         { includeLinks: options?.includeLinks === true }
       );
     },

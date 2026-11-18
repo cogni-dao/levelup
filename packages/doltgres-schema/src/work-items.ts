@@ -21,7 +21,10 @@
  */
 
 export {
+  workItemArtifacts,
   workItems,
+  type NewWorkItemArtifactRow,
   type NewWorkItemRow,
+  type WorkItemArtifactRow,
   type WorkItemRow,
 } from "@cogni/knowledge-base";
