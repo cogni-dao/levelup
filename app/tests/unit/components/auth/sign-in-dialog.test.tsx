@@ -15,7 +15,7 @@
 
 import "@testing-library/jest-dom/vitest";
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const signIn = vi.fn();
@@ -139,5 +139,101 @@ describe("SignInDialog — operator-attested GitHub takes the broker round trip 
 
 		expect(signIn).not.toHaveBeenCalled();
 		expect(assign).toHaveBeenCalledWith("https://op.test/identity/attest?x=1");
+	});
+});
+
+describe("SignInDialog — sign-in start failures", () => {
+	afterEach(() => {
+		vi.unstubAllGlobals();
+		signIn.mockReset();
+	});
+
+	it("announces HTTP failure, disables duplicate starts while pending, and retries successfully", async () => {
+		mockProviders(["operator-github", "discord"]);
+		const assign = vi.fn();
+		vi.stubGlobal("location", { assign });
+		renderDialog();
+		const github = await screen.findByRole("button", {
+			name: "Continue with GitHub",
+		});
+		let resolveStart!: (value: unknown) => void;
+		const start = vi
+			.fn()
+			.mockImplementationOnce(
+				() =>
+					new Promise((resolve) => {
+						resolveStart = resolve;
+					}),
+			)
+			.mockResolvedValueOnce({
+				ok: true,
+				json: async () => ({ authorizeUrl: "https://op.test/authorize" }),
+			});
+		vi.stubGlobal("fetch", start);
+		fireEvent.click(github);
+		expect(github).toBeDisabled();
+		expect(
+			screen.getByRole("button", { name: "Continue with Discord" }),
+		).toBeDisabled();
+		expect(screen.getByText(/signing in/i)).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: "Ethereum Wallet" }),
+		).toBeEnabled();
+		fireEvent.click(github);
+		expect(start).toHaveBeenCalledTimes(1);
+		resolveStart({ ok: false, text: async () => "private server internals" });
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			/sign.in.*failed|unable to sign in|could not sign in/i,
+		);
+		expect(
+			screen.queryByText(/private server internals/i),
+		).not.toBeInTheDocument();
+		expect(github).toBeEnabled();
+		fireEvent.click(github);
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+		await waitFor(() =>
+			expect(assign).toHaveBeenCalledWith("https://op.test/authorize"),
+		);
+	});
+
+	it.each([
+		[
+			"network rejection",
+			() => Promise.reject(new Error("private network detail")),
+		],
+		[
+			"invalid response",
+			() => Promise.resolve({ ok: true, json: async () => ({}) }),
+		],
+	])("announces a generic error for %s", async (_name, response) => {
+		mockProviders(["operator-github"]);
+		renderDialog();
+		const github = await screen.findByRole("button", {
+			name: "Continue with GitHub",
+		});
+		vi.stubGlobal("fetch", vi.fn(response));
+		fireEvent.click(github);
+		const alert = await screen.findByRole("alert");
+		expect(alert).toHaveTextContent(
+			/sign.in.*failed|unable to sign in|could not sign in/i,
+		);
+		expect(alert).not.toHaveTextContent(/private|undefined|error:/i);
+		expect(github).toBeEnabled();
+	});
+
+	it("announces an ordinary provider rejection without exposing its details", async () => {
+		mockProviders(["discord"]);
+		signIn.mockRejectedValueOnce(new Error("private provider detail"));
+		renderDialog();
+		const discord = await screen.findByRole("button", {
+			name: "Continue with Discord",
+		});
+		fireEvent.click(discord);
+		const alert = await screen.findByRole("alert");
+		expect(alert).toHaveTextContent(
+			/sign.in.*failed|unable to sign in|could not sign in/i,
+		);
+		expect(alert).not.toHaveTextContent(/private|error:/i);
+		expect(discord).toBeEnabled();
 	});
 });

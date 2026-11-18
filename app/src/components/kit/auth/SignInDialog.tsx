@@ -74,7 +74,7 @@ interface OauthProvider {
  */
 async function startSignIn(providerId: string): Promise<void> {
 	if (providerId !== OPERATOR_ATTESTED_PROVIDER_ID) {
-		void signIn(providerId, { callbackUrl: "/chat" });
+		await signIn(providerId, { callbackUrl: "/chat" });
 		return;
 	}
 	const res = await fetch("/api/v1/identity/bindings/import/start", {
@@ -82,8 +82,20 @@ async function startSignIn(providerId: string): Promise<void> {
 		headers: { "content-type": "application/json" },
 	});
 	if (!res.ok) throw new Error("start leg failed");
-	const { authorizeUrl } = (await res.json()) as { authorizeUrl: string };
-	window.location.assign(authorizeUrl);
+	const body: unknown = await res.json();
+	if (
+		!body ||
+		typeof body !== "object" ||
+		!("authorizeUrl" in body) ||
+		typeof body.authorizeUrl !== "string" ||
+		!body.authorizeUrl.trim()
+	)
+		throw new Error("invalid start response");
+	const authorizeUrl = new URL(body.authorizeUrl);
+	if (authorizeUrl.protocol !== "https:" && authorizeUrl.protocol !== "http:") {
+		throw new Error("invalid start response");
+	}
+	window.location.assign(body.authorizeUrl);
 }
 
 interface SignInDialogProps {
@@ -106,6 +118,7 @@ export function SignInDialog({
 	// click is followed by a real network hop. Without this the button sits inert and
 	// the page looks hung until the redirect finally happens.
 	const [pendingId, setPendingId] = useState<string | null>(null);
+	const [startFailed, setStartFailed] = useState(false);
 
 	// Fetch on MOUNT, not on open. The dialog is always mounted and merely toggles
 	// `open`, so gating the fetch on `open` meant every user paid the round trip AFTER
@@ -164,8 +177,12 @@ export function SignInDialog({
 								className="h-12 justify-start gap-3 text-sm"
 								disabled={pendingId !== null}
 								onClick={() => {
+									setStartFailed(false);
 									setPendingId(provider.id);
-									void startSignIn(provider.id).catch(() => setPendingId(null));
+									void startSignIn(provider.id).catch(() => {
+										setPendingId(null);
+										setStartFailed(true);
+									});
 								}}
 							>
 								{Icon ? <Icon className="size-5" /> : null}
@@ -173,6 +190,10 @@ export function SignInDialog({
 							</Button>
 						);
 					})}
+					{pendingId !== null && <p role="status">Signing in…</p>}
+					{startFailed && (
+						<p role="alert">Unable to sign in. Please try again.</p>
+					)}
 				</div>
 			</DialogContent>
 		</Dialog>
