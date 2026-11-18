@@ -49,6 +49,8 @@ function project(item: WorkItem, claim: Claim | null): WorkItem {
 export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
   private readonly content: DoltgresWorkItemAdapter;
   private readonly legacy: LegacyLeaseAdapter;
+  /** Insert-only artifacts (task.0028) live in the content store; leases never touch them. */
+  readonly artifacts: DoltgresWorkItemAdapter["artifacts"];
 
   constructor(sql: Sql, logger?: DoltgresWorkItemAdapterOptions["logger"], options: Options = {}) {
     const { legacyClient, ...contentOptions } = options;
@@ -56,6 +58,7 @@ export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
       ...contentOptions, idFloor: 1, writerLockProtocol: "bridge",
       ...(logger ? { logger } : {}),
     });
+    this.artifacts = this.content.artifacts;
     this.legacy = new LegacyLeaseAdapter(legacyClient ?? sql, {
       idFloor: 1,
       ...(options.recreateClient ? { recreateClient: options.recreateClient } : {}),
@@ -89,6 +92,7 @@ export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
   }
   // Change reasons live in Dolt history of the content table; claims are lease-only.
   history(id: WorkItemId) { return this.content.history(id); }
+  historyPage(...args: Parameters<DoltgresWorkItemAdapter["historyPage"]>) { return this.content.historyPage(...args); }
   async create(...args: Parameters<WorkItemsDoltgresPort["create"]>) {
     const item = await this.content.create(...args);
     return project(item, await this.legacy.get(item.id));

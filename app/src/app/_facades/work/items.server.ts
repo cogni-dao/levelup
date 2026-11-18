@@ -20,6 +20,7 @@ import type {
   WorkItemCoordinationOutput,
   WorkItemsPatchInput as ContractPatchInput,
   WorkItemDto,
+  WorkItemsGetOutput,
   WorkItemsListInput,
   WorkItemsListOutput,
   WorkItemSummariesListInput,
@@ -48,6 +49,7 @@ import {
 } from "@cogni/knowledge-store";
 import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
 import { createMoveMetricPorts } from "@/bootstrap/capabilities/work-item-moves";
+import { createItemRefPorts } from "@/bootstrap/capabilities/work-item-refs";
 import { getContainer } from "@/bootstrap/container";
 
 /**
@@ -142,12 +144,18 @@ function nextActionForWorkItem(item: WorkItem): string | null {
       return "/research";
     case "needs_design":
       return "/design";
+    case "needs_design_review":
+      return "/review-design";
     case "needs_implement":
       return "/implement";
+    case "needs_implementation_review":
+      return "/review-implementation";
+    case "needs_validation":
+      return "/validate-candidate";
     case "needs_closeout":
       return "/closeout";
     case "needs_merge":
-      return item.deployVerified ? "/merge" : "/validate-candidate";
+      return "/merge";
     case "blocked":
       return "blocked";
     case "done":
@@ -381,9 +389,17 @@ export async function listWorkBoardColumns(
   return { columns, queryCount: columns.length };
 }
 
-/** Single-item read options; `includeLinks` adds the first page of citation links (`?include=links`). */
+/**
+ * Single-item read options; `includeLinks` adds the first page of citation links (`?include=links`), `includeArtifacts`
+ * and `includeHistory` the first page of artifact and history refs, `artifactId` one artifact in full (story.0058).
+ */
 export interface WorkItemReadOptions extends WorkSummaryReadOptions {
   readonly includeLinks?: boolean;
+  readonly includeArtifacts?: boolean;
+  readonly includeHistory?: boolean;
+  readonly artifactId?: string;
+  /** Set false for a caller that needs only the item (the EDO expectations read). Default: read the latest artifacts. */
+  readonly artifacts?: boolean;
   /** Set false for a caller that needs only the stored move ids (the EDO expectations read). Default: resolve the chain. */
   readonly chain?: boolean;
 }
@@ -397,8 +413,9 @@ export interface WorkItemReadOptions extends WorkSummaryReadOptions {
 async function withItemEnvelope(
   dto: WorkItemDto,
   options?: WorkItemReadOptions
-): Promise<WorkItemDto> {
+): Promise<WorkItemsGetOutput> {
   const container = getContainer();
+  const artifactStore = container.workItemArtifacts?.artifacts;
   const readings = container.goalMetrics
     ? createMoveMetricPorts(
         () => container.goalMetrics,
@@ -411,6 +428,10 @@ async function withItemEnvelope(
     {
       readings,
       links: createCitationLinksPort(() => container.knowledgeStorePort),
+      // task.0028: the latest artifact of each kind, without body, one bounded read.
+      artifacts: artifactStore ? { latest: (id) => artifactStore.latest(id) } : undefined,
+      // story.0058: refs first, then one read.
+      ...createItemRefPorts({ artifacts: artifactStore, history: container.doltgresWorkItems }),
       log: (event) => container.log.warn(event, "work.items.envelope_degraded"),
     },
     options
@@ -420,7 +441,7 @@ async function withItemEnvelope(
 export async function getWorkItem(
   id: string,
   options?: WorkItemReadOptions
-): Promise<WorkItemDto | null> {
+): Promise<WorkItemsGetOutput | null> {
   const container = getContainer();
   // Doltgres-first: legacy markdown IDs (e.g. bug.0002) can also live in Doltgres
   // after the markdown→Doltgres import (task.5002). Fall back to markdown only when
