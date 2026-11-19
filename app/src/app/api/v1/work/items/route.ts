@@ -15,7 +15,7 @@ import {
   workItemsCreateOperation,
   workItemsListOperation,
 } from "@cogni/node-contracts";
-import { workItemWriteErrorResponse } from "@cogni/work-items";
+import { handleWorkItemCreate } from "@cogni/work-items";
 import { NextResponse } from "next/server";
 
 import {
@@ -27,7 +27,6 @@ import {
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { EVENT_NAMES } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -95,10 +94,8 @@ export const GET = wrapRouteHandlerWithLogging(
  * POST /api/v1/work/items — Create a new work item in Doltgres.
  *
  * Server allocates an ID in this node's own store. Author is derived from
- * `getSessionUser` and embedded in
- * the dolt_log commit message (AUTHOR_ATTRIBUTED). `moves` (story.0033): an unknown or
- * deprecated new metric id is HTTP 400 `cite_unresolved` at `moves`; a baseline failure
- * is HTTP 503 `metric_baseline_unavailable`.
+ * `getSessionUser` and embedded in the dolt_log commit message (AUTHOR_ATTRIBUTED).
+ * The package route core answers every write-contract refusal and logs the one terminal event.
  */
 export const POST = wrapRouteHandlerWithLogging(
   { routeId: "work.items.create", auth: { mode: "required", getSessionUser } },
@@ -106,80 +103,33 @@ export const POST = wrapRouteHandlerWithLogging(
     if (!sessionUser) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-    // Every refusal ends in ONE registered terminal event with its errorCode (task.0122): ids and codes, never the body.
-    const refuse = (
-      status: number,
-      errorCode: string,
-      body: unknown
-    ): NextResponse => {
-      ctx.log.info(
-        {
-          event: EVENT_NAMES.WORK_ITEMS_CREATE_REFUSED,
-          routeId: "work.items.create",
-          outcome: "refused",
-          status,
-          errorCode,
-        },
-        EVENT_NAMES.WORK_ITEMS_CREATE_REFUSED
-      );
-      return NextResponse.json(body, { status });
-    };
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return refuse(400, "invalid_json", { error: "invalid JSON body" });
-    }
-
-    const parseResult = workItemsCreateOperation.input.safeParse(body);
-    if (!parseResult.success) {
-      return refuse(400, "invalid_input", {
-        error: "invalid input",
-        issues: parseResult.error.issues,
-      });
-    }
-
-    try {
-      const created = await createWorkItem(parseResult.data, {
-        id: sessionUser.id,
-        walletAddress: sessionUser.walletAddress,
-      });
-      ctx.log.info(
-        {
-          event: EVENT_NAMES.WORK_ITEMS_CREATE_SUCCESS,
-          routeId: "work.items.create",
-          outcome: "success",
-          status: 201,
-          workItemId: created.id,
-          node: created.node,
-        },
-        EVENT_NAMES.WORK_ITEMS_CREATE_SUCCESS
-      );
-      return NextResponse.json(workItemsCreateOperation.output.parse(created), {
-        status: 201,
-      });
-    } catch (e) {
-      if (e instanceof NodeAdminRequiredError) {
-        return refuse(e.status, e.errorCode, {
-          error: e.message,
-          errorCode: e.errorCode,
-          action: e.action,
-        });
-      }
-      // The package owns every write-contract answer (scores, reason, cites, moves, revision
-      // conflict, write outcome unknown, resolver and baseline failures) and matches by name.
-      const mapped = workItemWriteErrorResponse(e, "create");
-      if (mapped) {
-        return refuse(mapped.status, mapped.errorCode, mapped.body);
-      }
-      if (e instanceof WorkItemsBackendNotReadyError) {
-        return refuse(503, "backend_unavailable", { error: e.message });
-      }
-      if ((e as Error)?.name === "WorkItemAlreadyExistsError") {
-        return refuse(409, "already_exists", { error: (e as Error).message });
-      }
-      throw e;
-    }
+    // The package owns parse, refusals and the one terminal event (bug.0063); this route keeps auth, the actor and node errors.
+    const result = await handleWorkItemCreate({
+      readJson: () => request.json(),
+      parse: (body) => workItemsCreateOperation.input.safeParse(body),
+      write: (input) =>
+        createWorkItem(input, {
+          id: sessionUser.id,
+          walletAddress: sessionUser.walletAddress,
+        }),
+      toBody: (created) => workItemsCreateOperation.output.parse(created),
+      mapNodeError: (e) => {
+        if (e instanceof NodeAdminRequiredError)
+          return {
+            status: e.status,
+            errorCode: e.errorCode,
+            body: { error: e.message, errorCode: e.errorCode, action: e.action },
+          };
+        if (e instanceof WorkItemsBackendNotReadyError)
+          return {
+            status: 503,
+            errorCode: "backend_unavailable",
+            body: { error: e.message },
+          };
+        return undefined;
+      },
+    });
+    ctx.log.info(result.event, result.event.event);
+    return NextResponse.json(result.body, { status: result.status });
   }
 );

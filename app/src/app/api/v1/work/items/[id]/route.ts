@@ -20,7 +20,10 @@ import {
   workItemsGetOperation,
   workItemsPatchOperation,
 } from "@cogni/node-contracts";
-import { workItemWriteErrorResponse } from "@cogni/work-items";
+import {
+  handleWorkItemPatch,
+  workItemWriteErrorResponse,
+} from "@cogni/work-items";
 import { NextResponse } from "next/server";
 
 import {
@@ -34,7 +37,6 @@ import {
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { EVENT_NAMES } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -116,108 +118,38 @@ export const PATCH = wrapRouteHandlerWithLogging<{
     }
 
     const { id } = await context.params;
-    // Every refusal ends in ONE registered terminal event with its errorCode (task.0122): ids and codes, never the body.
-    const refuse = (
-      status: number,
-      errorCode: string,
-      body: unknown,
-      extra: Record<string, string> = {}
-    ): NextResponse => {
-      ctx.log.info(
-        {
-          event: EVENT_NAMES.WORK_ITEMS_PATCH_REFUSED,
-          routeId: "work.items.patch",
-          outcome: "refused",
-          workItemId: id,
-          status,
-          errorCode,
-          ...extra,
-        },
-        EVENT_NAMES.WORK_ITEMS_PATCH_REFUSED
-      );
-      return NextResponse.json(body, { status });
-    };
-
-    let body: unknown;
-    try {
-      body = await request.json();
-    } catch {
-      return refuse(400, "invalid_json", { error: "invalid JSON body" });
-    }
-
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "id" in body &&
-      body.id !== undefined &&
-      body.id !== id
-    ) {
-      return refuse(400, "id_mismatch", { error: "body id must match path id" });
-    }
-
-    const parseResult = workItemsPatchOperation.input.safeParse({
-      ...(typeof body === "object" && body !== null ? body : {}),
-      id,
+    // The package owns parse, refusals and the one terminal event (bug.0063); this route keeps auth, the actor and node errors.
+    const result = await handleWorkItemPatch(id, {
+      readJson: () => request.json(),
+      parse: (body) => workItemsPatchOperation.input.safeParse(body),
+      write: (input) =>
+        patchWorkItem(input, {
+          id: sessionUser.id,
+          walletAddress: sessionUser.walletAddress,
+        }),
+      toBody: (patched) => workItemsPatchOperation.output.parse(patched),
+      mapNodeError: (e) => {
+        if (e instanceof WorkItemNotFoundError)
+          return { status: 404, errorCode: "not_found", body: { error: e.message } };
+        if (e instanceof WorkItemForbiddenError)
+          return { status: 403, errorCode: "forbidden", body: { error: e.message } };
+        if (e instanceof NodeAdminRequiredError)
+          return {
+            status: e.status,
+            errorCode: e.errorCode,
+            body: { error: e.message, errorCode: e.errorCode, action: e.action },
+          };
+        if (e instanceof WorkItemsBackendNotReadyError)
+          return {
+            status: 503,
+            errorCode: "backend_unavailable",
+            body: { error: e.message },
+          };
+        return undefined;
+      },
     });
-    if (!parseResult.success) {
-      return refuse(400, "invalid_input", {
-        error: "invalid input",
-        issues: parseResult.error.issues,
-      });
-    }
-
-    try {
-      const patched = await patchWorkItem(parseResult.data, {
-        id: sessionUser.id,
-        walletAddress: sessionUser.walletAddress,
-      });
-      ctx.log.info(
-        {
-          event: EVENT_NAMES.WORK_ITEMS_PATCH_SUCCESS,
-          routeId: "work.items.patch",
-          outcome: "success",
-          status: 200,
-          workItemId: id,
-          citeCount: parseResult.data.cites?.length ?? 0,
-        },
-        EVENT_NAMES.WORK_ITEMS_PATCH_SUCCESS
-      );
-      return NextResponse.json(workItemsPatchOperation.output.parse(patched));
-    } catch (e) {
-      // The package owns every write-contract answer (scores, reason, cites, moves, revision
-      // conflict, write outcome unknown, resolver and baseline failures) and matches by name.
-      const mapped = workItemWriteErrorResponse(e, "patch");
-      if (mapped) {
-        // What the gate found: the stage move and the missing artifact or fact, never a body.
-        const { from, to, missing } = mapped.body as {
-          from?: unknown;
-          to?: unknown;
-          missing?: unknown;
-        };
-        return refuse(mapped.status, mapped.errorCode, mapped.body, {
-          ...(typeof from === "string" ? { from } : {}),
-          ...(typeof to === "string" ? { to } : {}),
-          ...(typeof missing === "string" ? { missing } : {}),
-        });
-      }
-      if (e instanceof WorkItemNotFoundError) {
-        return refuse(404, "not_found", { error: e.message });
-      }
-      if (e instanceof WorkItemForbiddenError) {
-        return refuse(403, "forbidden", { error: e.message });
-      }
-      if (e instanceof NodeAdminRequiredError) {
-        return refuse(e.status, e.errorCode, {
-          error: e.message,
-          errorCode: e.errorCode,
-          action: e.action,
-        });
-      }
-      if (e instanceof WorkItemsBackendNotReadyError) {
-        return refuse(503, "backend_unavailable", { error: e.message });
-      }
-      throw e;
-    }
+    ctx.log.info(result.event, result.event.event);
+    return NextResponse.json(result.body, { status: result.status });
   }
 );
 
