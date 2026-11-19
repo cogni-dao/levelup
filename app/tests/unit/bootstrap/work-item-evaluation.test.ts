@@ -27,23 +27,23 @@ function fixture() {
     } as unknown as WorkItemQueryPort,
     workItemCommand: {} as WorkItemCommandPort,
     backlogReader: { list },
-    backlogWriter: { store: { patch }, principalId: () => actor },
+    backlogWriter: { store: { patch }, attribution: () => ({ actor }) },
   });
   return { capability, patch, list, setActor: (value: string) => { actor = value; },
   };
 }
 describe("shared evaluation capability", () => {
-  it("forwards scores/CAS and resolves authenticated principal for every call", async () => {
+  it("forwards scores/CAS and attributes to the authenticated actor for every call", async () => {
     const f = fixture();
     const first = await f.capability.patch({ id: item.id, expectedRevision: 2, set: { scores },
     });
-    expect(f.patch).toHaveBeenLastCalledWith({ id: item.id, expectedRevision: 2, set: { scores } }, "actor-a");
+    expect(f.patch).toHaveBeenLastCalledWith({ id: item.id, expectedRevision: 2, set: { scores } }, { actor: "actor-a" });
     expect(first).toMatchObject({ scores, revision: 3, rankScore: rankScore(scores),
     });
     f.setActor("actor-b");
     await f.capability.patch({ id: item.id, expectedRevision: 3, set: { scores: null },
     });
-    expect(f.patch).toHaveBeenLastCalledWith({ id: item.id, expectedRevision: 3, set: { scores: null } }, "actor-b");
+    expect(f.patch).toHaveBeenLastCalledWith({ id: item.id, expectedRevision: 3, set: { scores: null } }, { actor: "actor-b" });
   });
   it("preserves conflicts and paginated score-bearing readback", async () => {
     const f = fixture();

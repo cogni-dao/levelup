@@ -31,6 +31,8 @@ export const EVENT_NAMES = {
   // The success twins: one terminal event per accepted create or patch, ids and counts only.
   WORK_ITEMS_CREATE_SUCCESS: "work.items.create_success",
   WORK_ITEMS_PATCH_SUCCESS: "work.items.patch_success",
+  // A node run wrote with no run record to name (the record was missing, had no kind, or could not be read; task.0133): the write still happens as the acting identity, with no Run line. One warn per such write, with runId when known.
+  WORK_ITEMS_ATTRIBUTION_RUN_MISSING: "work.items.attribution_run_missing",
   // Work-item PR repo pin at boot (task.0122): unset or malformed leaves it unpinned; entries that are not owner/repo are ignored. Once at boot, never per request.
   ADAPTER_WORK_ITEMS_PR_REPO_UNPINNED: "adapter.work_items.pr_repo_unpinned",
   ADAPTER_WORK_ITEMS_PR_REPO_IGNORED: "adapter.work_items.pr_repo_ignored",

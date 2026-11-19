@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { EdoCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
+import type { EdoCapability as EdoWriteCapability, EdoToolCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
 import type { ToolSourcePort } from "@cogni/ai-core";
 import type {
 	MetricsCapability,
@@ -111,7 +111,6 @@ import {
 	GITHUB_ADAPTER_VERSION,
 	GitHubWebhookNormalizer,
 	getAppDb,
-	getExecutionScope,
 	LangfuseAdapter,
 	LiteLlmAdapter,
 	type MimirAdapterConfig,
@@ -207,6 +206,7 @@ import {
 	getStewardWalletConfig,
 } from "@/shared/config";
 import { serverEnv } from "@/shared/env/server-env";
+import { bindEdoToolCapability, runAttribution } from "@/bootstrap/write-attribution";
 import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -275,7 +275,10 @@ export interface Container {
 	/** Direct knowledge store port — exposed for the cookie-only browse endpoint. Undefined when DOLTGRES_URL is unset. */
 	knowledgeStorePort: KnowledgeStorePort | undefined;
 	/** EDO hypothesis-loop capability for the langgraph tool bindings AND the bearer-auth REST routes under /api/v1/edo. Always present (stubs throw when DOLTGRES_URL is unset). */
-	edoCapability: EdoCapability;
+	/** EDO hypothesis-loop capability for the bearer-auth REST routes under /api/v1/edo. Every write takes the host-built attribution (task.0133). */
+	edoCapability: EdoWriteCapability;
+	/** The same capability for the langgraph tools: each write is attributed from the run's execution scope. */
+	edoToolCapability: EdoToolCapability;
 	/** Thread persistence scoped to a user (RLS enforced) */
 	threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
 	/** Governance status queries (system tenant scope) */
@@ -745,7 +748,7 @@ function createContainer(): Container {
 
 	// KnowledgeCapability + EdoCapability for AI tools (require DOLTGRES_URL)
 	let knowledgeCapability: KnowledgeCapability;
-	let edoCapability: EdoCapability;
+	let edoCapability: EdoWriteCapability;
 	let knowledgeContributionService: ContributionService | undefined;
 	let goalMetrics: MetricService | undefined;
 	const nodeAdmin = createApproversNodeAdminAuthority();
@@ -954,19 +957,34 @@ function createContainer(): Container {
 		backlogReader: doltgresWorkItems,
 		backlogWriter: {
 			store: doltgresWorkItems,
-			principalId: () => {
-				const actor = getExecutionScope().actorUserId;
-				if (!actor) throw new Error("Authenticated work-item actor required");
-				return actor;
-			},
+			// ACTING_PRINCIPAL_FOR_WRITES (task.0133): attributed per call from the run's scope, never at construction.
+			attribution: runAttribution,
+			// A run with no acting identity writes nothing, and the refusal is as findable as any other (same event as the route's).
+			attributionDenied: ({ workItemId, error }) =>
+				log.info(
+					{
+						event: EVENT_NAMES.WORK_ITEMS_PATCH_REFUSED,
+						routeId: "work.items.patch",
+						via: "tool",
+						outcome: "refused",
+						workItemId,
+						status: 403,
+						errorCode: "attribution_denied",
+						errorName: error instanceof Error ? error.name : "unknown",
+					},
+					EVENT_NAMES.WORK_ITEMS_PATCH_REFUSED,
+				),
 		},
 	});
+
+	// ACTING_PRINCIPAL_FOR_WRITES (task.0133): a tool never builds an attribution; the host binds the run's at each call.
+	const edoToolCapability: EdoToolCapability = bindEdoToolCapability(edoCapability);
 
 	// ToolSource with real implementations (per CAPABILITY_INJECTION)
 	const toolBindings = createToolBindings({
 		nodePublicOrigin: env.APP_BASE_URL,
 		knowledgeCapability,
-		edoCapability,
+		edoCapability: edoToolCapability,
 		metricsCapability,
 		webSearchCapability,
 		repoCapability,
@@ -1140,6 +1158,7 @@ function createContainer(): Container {
 		nodeAdmin,
 		knowledgeStorePort,
 		edoCapability,
+		edoToolCapability,
 		threadPersistenceForUser: (userId: UserId) =>
 			new DrizzleThreadPersistenceAdapter(db, userActor(userId)),
 		governanceStatus: new DrizzleGovernanceStatusAdapter(

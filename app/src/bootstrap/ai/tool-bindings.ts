@@ -59,7 +59,7 @@ import {
 } from "@cogni/ai-tools";
 
 import type {
-  EdoCapability,
+  EdoToolCapability,
   KnowledgeCapability,
 } from "@cogni/knowledge-store/contracts";
 
@@ -87,7 +87,7 @@ import {
 export interface ToolBindingDeps {
   readonly nodePublicOrigin?: string | undefined;
   readonly knowledgeCapability: KnowledgeCapability;
-  readonly edoCapability: EdoCapability;
+  readonly edoCapability: EdoToolCapability;
   readonly metricsCapability: MetricsCapability;
   readonly webSearchCapability: WebSearchCapability;
   readonly repoCapability: RepoCapability;
