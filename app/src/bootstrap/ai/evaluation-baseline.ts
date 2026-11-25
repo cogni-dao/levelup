@@ -7,6 +7,7 @@ import { CORE_TOOL_BUNDLE as SHARED_TOOL_BUNDLE,
   type CatalogBoundTool as SharedCatalogBoundTool,
 } from "@cogni/shared-ai-tools";
 
+// core__work_item_transition stays listed so the local copy is excluded: the released ai-tools 0.16 dropped it.
 const baselineIds = new Set([
   "core__goal_list", "core__work_item_query", "core__work_item_read", "core__work_item_transition",
   "core__knowledge_search",

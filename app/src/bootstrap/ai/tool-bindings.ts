@@ -55,7 +55,6 @@ import {
   VCS_MERGE_PR_NAME,
   WEB_SEARCH_NAME,
   WORK_ITEM_QUERY_NAME,
-  WORK_ITEM_TRANSITION_NAME,
 } from "@cogni/ai-tools";
 
 import type {
@@ -73,7 +72,6 @@ import {
   createKnowledgeWriteImplementation,
   createWorkItemQueryImplementation,
   createWorkItemReadImplementation,
-  createWorkItemTransitionImplementation,
   GOAL_LIST_NAME,
   getCurrentTimeImplementation,
   WORK_ITEM_READ_NAME,
@@ -213,10 +211,6 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     [WORK_ITEM_READ_NAME]: createWorkItemReadImplementation({
       workItemCapability: deps.workItemCapability,
       nodePublicOrigin: deps.nodePublicOrigin,
-    }) as AnyToolImplementation,
-
-    [WORK_ITEM_TRANSITION_NAME]: createWorkItemTransitionImplementation({
-      workItemCapability: deps.workItemCapability,
     }) as AnyToolImplementation,
   };
 }

@@ -239,6 +239,20 @@
       "when": 1795197147522,
       "tag": "0033_polite_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1795241020115,
+      "tag": "0034_agent_authority",
+      "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1795241042644,
+      "tag": "0035_agent_authority_grants",
+      "breakpoints": true
     }
   ]
 }

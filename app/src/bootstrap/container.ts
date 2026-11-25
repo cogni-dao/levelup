@@ -276,6 +276,7 @@ export interface Container {
 	repoCapability: RepoCapability;
 	/** Tool source with real implementations for AI tool execution */
 	toolSource: ToolSourcePort;
+	sharedScheduleCapability: import("@cogni/ai-tools").ScheduleCapability;
 	/** External-agent knowledge contribution service — undefined when DOLTGRES_URL is unset */
 	knowledgeContributionService: ContributionService | undefined;
 	/** GOAL_CHANGE_IS_NODE_ADMIN / P0P1_IS_NODE_ADMIN: this node's one node-admin authority (repo-spec admin wallets). */
@@ -1190,6 +1191,7 @@ function createContainer(): Container {
 		webSearchCapability,
 		repoCapability,
 		toolSource,
+		sharedScheduleCapability: scheduleCapability,
 		knowledgeContributionService,
 		nodeAdmin,
 		knowledgeStorePort,
