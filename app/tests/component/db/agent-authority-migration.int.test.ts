@@ -443,7 +443,7 @@ describe("agent authority migration", () => {
         await service`SELECT * FROM users WHERE id = ${nodeAi}`,
       ).toHaveLength(0);
       expect(
-        await app`SELECT * FROM drizzle.__drizzle_migrations WHERE created_at > (SELECT max(created_at) FROM drizzle.__drizzle_migrations WHERE created_at <= 1795144912321)`,
+        await app`SELECT * FROM drizzle.__drizzle_migrations WHERE created_at > (SELECT max(created_at) FROM drizzle.__drizzle_migrations WHERE created_at <= 1795197147522)`,
       ).toHaveLength(0);
     });
   });
