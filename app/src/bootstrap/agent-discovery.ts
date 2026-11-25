@@ -23,7 +23,6 @@ import {
   LangGraphDevAgentCatalogProvider,
   LangGraphInProcAgentCatalogProvider,
 } from "@/adapters/server";
-import { SandboxAgentCatalogProvider } from "@/adapters/server/sandbox/sandbox-agent-catalog.provider";
 import type { AgentDescriptor } from "@/ports";
 import { serverEnv } from "@/shared/env";
 
@@ -47,9 +46,6 @@ export function createAgentCatalog(): {
   const providers: AgentCatalogProvider[] = env.LANGGRAPH_DEV_URL
     ? [new LangGraphDevAgentCatalogProvider()]
     : [new LangGraphInProcAgentCatalogProvider(LANGGRAPH_CATALOG)];
-
-  // Sandbox agents always registered — LITELLM_MASTER_KEY enforced by assertRuntimeSecrets()
-  providers.push(new SandboxAgentCatalogProvider());
 
   return new AggregatingAgentCatalog(providers);
 }

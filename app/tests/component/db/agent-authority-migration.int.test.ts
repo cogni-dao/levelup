@@ -71,12 +71,12 @@ beforeAll(async () => {
   }
   await admin.unsafe(`GRANT ${roles.app} TO ${roles.migration}`);
   // Use the exact immutable pre-adoption history, not a second model of its schema.
-  baseline = await mkdtemp(path.join(tmpdir(), "red-authority-baseline-"));
+  baseline = await mkdtemp(path.join(tmpdir(), "authority-baseline-"));
   await mkdir(path.join(baseline, "meta"));
   const journal = JSON.parse(
     await readFile(path.join(migrations, "meta/_journal.json"), "utf8"),
   );
-  journal.entries = journal.entries.filter((e: { idx: number }) => e.idx < 35);
+  journal.entries = journal.entries.filter((e: { idx: number }) => e.idx < 34);
   await writeFile(
     path.join(baseline, "meta/_journal.json"),
     JSON.stringify(journal),

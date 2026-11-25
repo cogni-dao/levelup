@@ -37,11 +37,11 @@ import {
   type CreateGraphFn,
   type GraphResult,
   type InProcGraphRequest,
-  LANGGRAPH_CATALOG,
   type ToolExecFn,
 } from "@cogni/langgraph-graphs";
 import {
   createInProcGraphRunner,
+  LANGGRAPH_CATALOG,
   createSharedInProcGraphRunner,
   SHARED_NODE_CATALOG,
   type SharedRunnerOptions,

@@ -20,7 +20,6 @@
     "test": "vitest run --config vitest.config.ts --passWithNoTests"
   },
   "dependencies": {
-    "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/shared-langgraph-graphs": "https://github.com/cogni-dao/node-template/releases/download/langgraph-graphs-v0.11.0/cogni-dao-langgraph-graphs-0.11.0.tgz",
     "@cogni/ai-tools": "https://github.com/cogni-dao/node-template/releases/download/ai-tools-v0.16.0/cogni-dao-ai-tools-0.16.0.tgz",
     "@cogni/ai-core": "workspace:*",

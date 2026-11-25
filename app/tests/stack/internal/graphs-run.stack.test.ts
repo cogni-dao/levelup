@@ -30,7 +30,7 @@ import { executionGrants, executionRequests, users } from "@/shared/db/schema";
 const SCHEDULER_TOKEN = process.env.SCHEDULER_API_TOKEN ?? "";
 
 /** Test graph ID */
-const TEST_GRAPH_ID = "langgraph:poet";
+const TEST_GRAPH_ID = "langgraph:cogni";
 
 describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
   let testActor: TestActor;
@@ -348,7 +348,7 @@ describe("[internal] POST /api/internal/graphs/{graphId}/runs", () => {
       });
 
       const request = createRequest(
-        TEST_GRAPH_ID, // Requesting poet but grant is for other
+        TEST_GRAPH_ID, // Requesting cogni but grant is for other
         { executionGrantId: wrongScopeGrantId, input: { messages: [] } },
         { token: SCHEDULER_TOKEN, idempotencyKey: randomUUID() }
       );

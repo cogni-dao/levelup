@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/langgraph-graphs`
- * Purpose: Barrel export for LangGraph graph definitions and runtime utilities.
+ * Purpose: Barrel export for LangGraph runtime utilities. Graph definitions are the published releases.
  * Scope: Re-exports public types. All @langchain/* code lives here (per NO_LANGCHAIN_IN_SRC). Does not contain implementation logic.
  * Invariants:
  *   - SINGLE_SOURCE_OF_TRUTH: These are the canonical LangGraph definitions
@@ -13,25 +13,6 @@
  * Links: https://node-template.cognidao.org/knowledge/graph-execution-invariants
  * @public
  */
-
-// Re-export catalog (single source of truth for graph definitions)
-export {
-  DEFAULT_LANGGRAPH_GRAPH_ID,
-  LANGGRAPH_CATALOG,
-  LANGGRAPH_GRAPH_IDS,
-  LANGGRAPH_PROVIDER_ID,
-  type LangGraphCatalogKeys,
-  type LangGraphGraphId,
-} from "./catalog";
-
-// Re-export graph constants and factories
-export {
-  AUTORESEARCH_REGISTRY_SWARM_GRAPH_NAME,
-  AUTORESEARCH_SINGLE_LANE_GRAPH_NAME,
-  AUTORESEARCH_SYNTROPY_LOOP_GRAPH_NAME,
-  BRAIN_GRAPH_NAME,
-  POET_GRAPH_NAME,
-} from "./graphs/index";
 
 // Re-export inproc runner (all LangChain logic contained in package)
 export { createInProcGraphRunner } from "./inproc/runner";

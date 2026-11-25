@@ -366,7 +366,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
       if (suppliedRequestHash && pending.runId === runId) {
         // The completion facade durably claimed this exact request before
         // starting Temporal. This workflow owns the pending record.
-        requestAlreadyClaimed = !sharedChat;
+        requestAlreadyClaimed = true;
       } else {
         log.info(
           { idempotencyKey, runId: pending.runId },

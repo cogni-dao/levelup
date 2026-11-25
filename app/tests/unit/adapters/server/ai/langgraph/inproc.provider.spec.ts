@@ -15,12 +15,24 @@
 
 import type { AiEvent, ToolSourcePort } from "@cogni/ai-core";
 import { TOOL_CATALOG, toBoundToolRuntime } from "@cogni/ai-tools";
+import { SHARED_NODE_CATALOG } from "@cogni/node-template-graphs";
 import { describe, expect, it, vi } from "vitest";
 
 import { runInScope } from "@/adapters/server/ai/execution-scope";
 import type { CompletionUnitAdapter } from "@/adapters/server/ai/langgraph/inproc.provider";
 import { LangGraphInProcProvider } from "@/adapters/server/ai/langgraph/inproc.provider";
 import type { GraphRunRequest } from "@/ports";
+
+// A plain harness graph (no program, no principal): LevelUp's published graphs both carry a program
+// and principal, so provider wiring that needs neither runs on this test-only catalog entry.
+const TEST_CATALOG = {
+  "test-plain": {
+    displayName: "Test plain",
+    description: "plain harness graph without program or principal",
+    toolIds: [],
+    graphFactory: SHARED_NODE_CATALOG.cogni.graphFactory,
+  },
+} as unknown as ConstructorParameters<typeof LangGraphInProcProvider>[4];
 
 const TEST_SCOPE = {
   billing: {
@@ -118,7 +130,7 @@ function createTestRequest(
     runId: "test-run-id",
     messages: [{ role: "user", content: "Hello" }],
     modelRef: { providerKey: "platform", modelId: "test-model" },
-    graphId: "langgraph:poet",
+    graphId: "langgraph:test-plain",
     ...overrides,
   };
 }
@@ -139,10 +151,13 @@ describe("LangGraphInProcProvider", () => {
         const mockToolSource = createMockToolSource();
         const provider = new LangGraphInProcProvider(
           mockAdapter,
-          mockToolSource
+          mockToolSource,
+          undefined,
+          [],
+          TEST_CATALOG
         );
 
-        const request = createTestRequest({ graphId: "langgraph:poet" });
+        const request = createTestRequest({ graphId: "langgraph:test-plain" });
         const { stream, final } = provider.runGraph(request);
 
         const events = await collectEvents(stream);
@@ -223,7 +238,7 @@ describe("LangGraphInProcProvider", () => {
 
         // Request with wrong provider prefix
         const request = createTestRequest({
-          graphId: "wrong_provider:poet",
+          graphId: "wrong_provider:cogni",
         });
         const { stream, final } = provider.runGraph(request);
 
