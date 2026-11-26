@@ -3,6 +3,8 @@
 
 /** Pure URL/history policy for route-backed work-item selection. */
 
+import { WORK_ITEM_SCOPED_PARAMS } from "@cogni/knowledge-base-ui";
+
 type SerializableSearchParams = Pick<URLSearchParams, "toString">;
 type WorkRouter = {
   push(href: string, options: { scroll: boolean }): void;
@@ -15,6 +17,18 @@ interface WorkListState {
   readonly sort: string | null;
   readonly query: string;
   readonly rankRange?: readonly [number | undefined, number | undefined];
+}
+
+/** URL parameters that belong to one open item (story.0058): its selected artifact and its older ref pages. The shared view's list (story.0085). */
+export const ITEM_SCOPED_PARAMS = WORK_ITEM_SCOPED_PARAMS;
+
+/** The same parameters without the ones that belong to the open item; another item, or none, never inherits them. */
+export function withoutItemScopedParams(
+  searchParams: SerializableSearchParams
+): URLSearchParams {
+  const params = new URLSearchParams(searchParams.toString());
+  for (const key of ITEM_SCOPED_PARAMS) params.delete(key);
+  return params;
 }
 
 export function workListHref(searchParams: SerializableSearchParams): string {
@@ -46,7 +60,7 @@ export function workViewHref(
   searchParams: SerializableSearchParams,
   state: WorkListState
 ): string {
-  const params = new URLSearchParams(searchParams.toString());
+  const params = withoutItemScopedParams(searchParams);
   setListParam(params, "type", state.type);
   setListParam(params, "status", state.status);
   if (state.status.length === 0) params.set("status", "all");
@@ -72,12 +86,16 @@ export function openWorkItemPermalink(
   id: string,
   searchParams: SerializableSearchParams
 ): void {
-  router.push(workItemHref(id, searchParams), { scroll: false });
+  router.push(workItemHref(id, withoutItemScopedParams(searchParams)), {
+    scroll: false,
+  });
 }
 
 export function closeWorkItemPermalink(
   router: WorkRouter,
   searchParams: SerializableSearchParams
 ): void {
-  router.replace(workListHref(searchParams), { scroll: false });
+  router.replace(workListHref(withoutItemScopedParams(searchParams)), {
+    scroll: false,
+  });
 }

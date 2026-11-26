@@ -36,6 +36,7 @@ import type {
 } from "@cogni/work-items";
 import {
   composeItemEnvelope,
+  createItemRefPorts,
   judgeMoveSummaries,
   toWorkItemDto as toDto,
   toWorkItemId,
@@ -51,7 +52,6 @@ import {
 } from "@cogni/knowledge-store";
 import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
 import { createMoveMetricPorts } from "@/bootstrap/capabilities/work-item-moves";
-import { createItemRefPorts } from "@/bootstrap/capabilities/work-item-refs";
 import { getContainer } from "@/bootstrap/container";
 
 /**
