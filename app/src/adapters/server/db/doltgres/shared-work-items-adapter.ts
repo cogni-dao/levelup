@@ -17,6 +17,7 @@ import type {
   WorkItemId,
   WorkQuery,
   WorkSummaryReadOptions,
+  WriteAttribution,
 } from "@cogni/work-items";
 import {
   DoltgresWorkItemAdapter,
@@ -102,7 +103,8 @@ export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
     return project(item, await this.legacy.get(item.id));
   }
   // Keep LevelUp's existing authenticated DELETE endpoint compatible during adoption.
-  delete(...args: Parameters<WorkItemsDoltgresPort["delete"]>) { return this.legacy.delete(...args); }
+  // The legacy delete records a bare actor id: it takes the attribution's actor (task.0175).
+  delete(id: WorkItemId, attribution: WriteAttribution) { return this.legacy.delete(id, attribution.actor); }
   async claim(input: Parameters<WorkItemsDoltgresPort["claim"]>[0]) {
     const claim = await this.legacy.claim(input);
     return project((await this.content.get(input.id)) ?? claim, claim);

@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { EdoCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
+import type { EdoCapability as EdoWriteCapability, EdoToolCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
 import type { ToolSourcePort } from "@cogni/ai-core";
 import type {
 	MetricsCapability,
@@ -61,6 +61,7 @@ import {
 	defaultCanMergeKnowledge,
 	type KnowledgeStorePort,
 	type NodeAdminAuthority,
+	bindEdoToolCapability,
 	shapeGate,
 } from "@cogni/knowledge-store";
 import {
@@ -89,7 +90,7 @@ import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/priv
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { ScheduleRunReader } from "@cogni/scheduling";
 import { PostgresScheduleRunReader } from "@cogni/scheduling/adapters/postgres";
-import type { WorkItemArtifactDeps, WorkItemQueryPort } from "@cogni/work-items";
+import { createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort } from "@cogni/work-items";
 import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
 import {
@@ -215,6 +216,8 @@ import {
 	getStewardWalletConfig,
 } from "@/shared/config";
 import { serverEnv } from "@/shared/env/server-env";
+import { runAttribution, runAttributionScope } from "@/bootstrap/run-attribution";
+import { getCurrentTraceId } from "@/bootstrap/otel";
 import { EVENT_NAMES, logEvent, makeLogger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -283,7 +286,10 @@ export interface Container {
 	/** Direct knowledge store port — exposed for the cookie-only browse endpoint. Undefined when DOLTGRES_URL is unset. */
 	knowledgeStorePort: KnowledgeStorePort | undefined;
 	/** EDO hypothesis-loop capability for the langgraph tool bindings AND the bearer-auth REST routes under /api/v1/edo. Always present (stubs throw when DOLTGRES_URL is unset). */
-	edoCapability: EdoCapability;
+	/** EDO hypothesis-loop capability for the bearer-auth REST routes under /api/v1/edo. Every write takes the host-built attribution (task.0133). */
+	edoCapability: EdoWriteCapability;
+	/** The same capability for the langgraph tools: each write is attributed from the run's execution scope. */
+	edoToolCapability: EdoToolCapability;
 	/** Thread persistence scoped to a user (RLS enforced) */
 	threadPersistenceForUser(userId: UserId): ThreadPersistencePort;
 	/** Governance status queries (system tenant scope) */
@@ -769,7 +775,7 @@ function createContainer(): Container {
 
 	// KnowledgeCapability + EdoCapability for AI tools (require DOLTGRES_URL)
 	let knowledgeCapability: KnowledgeCapability;
-	let edoCapability: EdoCapability;
+	let edoCapability: EdoWriteCapability;
 	let knowledgeContributionService: ContributionService | undefined;
 	let goalMetrics: MetricService | undefined;
 	const nodeAdmin = createApproversNodeAdminAuthority();
@@ -994,6 +1000,14 @@ function createContainer(): Container {
 		log.warn("Knowledge store not configured (DOLTGRES_URL not set)");
 	}
 
+	// ACTING_PRINCIPAL_FOR_WRITES (task.0133): every tool write of the work-item capability is attributed here, and only here: see `createWorkItemWriters` in `@cogni/work-items`.
+	const workItemWriters = createWorkItemWriters({
+		log,
+		scope: runAttributionScope,
+		traceId: getCurrentTraceId,
+		store: () => doltgresWorkItems,
+		artifacts: () => workItemArtifacts,
+	});
 	const workItemCapability = createWorkItemCapability({
 		workItemQuery: workItemAdapter,
 		workItemCommand: workItemAdapter,
@@ -1006,21 +1020,17 @@ function createContainer(): Container {
 		links: createCitationLinksPort(() => knowledgeStorePort),
 		log: (event) => log.warn(event, "work.items.envelope_degraded"),
 		backlogReader: doltgresWorkItems,
-		backlogWriter: {
-			store: doltgresWorkItems,
-			principalId: () => {
-				const actor = getExecutionScope().actorUserId;
-				if (!actor) throw new Error("Authenticated work-item actor required");
-				return actor;
-			},
-		},
+		backlogWriter: workItemWriters.backlogWriter,
 	});
+
+	// ACTING_PRINCIPAL_FOR_WRITES (task.0133): a tool never builds an attribution; the host binds the run's at each call.
+	const edoToolCapability: EdoToolCapability = bindEdoToolCapability(edoCapability, runAttribution);
 
 	// ToolSource with real implementations (per CAPABILITY_INJECTION)
 	const toolBindings = createToolBindings({
 		nodePublicOrigin: env.APP_BASE_URL,
 		knowledgeCapability,
-		edoCapability,
+		edoCapability: edoToolCapability,
 		metricsCapability,
 		webSearchCapability,
 		repoCapability,
@@ -1195,6 +1205,7 @@ function createContainer(): Container {
 		knowledgeStorePort,
 		knowledgeReadCounter,
 		edoCapability,
+		edoToolCapability,
 		threadPersistenceForUser: (userId: UserId) =>
 			new DrizzleThreadPersistenceAdapter(db, userActor(userId)),
 		governanceStatus: new DrizzleGovernanceStatusAdapter(

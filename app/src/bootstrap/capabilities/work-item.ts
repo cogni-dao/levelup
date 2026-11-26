@@ -30,6 +30,7 @@ import type {
   WorkItemQueryPort,
   WorkItemStatus,
   WorkItemType,
+  WriteAttribution,
 } from "@cogni/work-items";
 import type {
   EnvelopeDegradedEvent,
@@ -66,7 +67,13 @@ export interface WorkItemCapabilityDeps {
   readonly artifacts?: ItemArtifactsPort | undefined;
   /** One event per degraded envelope part (chain or links). */
   readonly log?: ((event: EnvelopeDegradedEvent) => void) | undefined;
-  readonly backlogWriter?: { readonly store: Pick<WorkItemsDoltgresPort, "patch">; readonly principalId: () => string };
+  readonly backlogWriter?: {
+    readonly store: Pick<WorkItemsDoltgresPort, "patch">;
+    /** Host-built at invocation: the run's acting identity and the run (task.0133). */
+    readonly attribution: () => WriteAttribution;
+    /** One terminal refusal when the attribution could not be built (a run with no acting identity): nothing was written. */
+    readonly attributionDenied?: (event: { workItemId: string; error: unknown }) => void;
+  };
 }
 
 /**
@@ -175,6 +182,14 @@ export function createWorkItemCapability(
     async patch(input): Promise<WorkItemInfo> {
       const writer = deps.backlogWriter;
       if (writer) {
+        let attribution: WriteAttribution;
+        try {
+          attribution = writer.attribution();
+        } catch (error) {
+          // Fail closed, and say so in one terminal event.
+          writer.attributionDenied?.({ workItemId: input.id, error });
+          throw error;
+        }
         try {
           const updated = await writer.store.patch(
             toWorkItemsPatchInput({
@@ -184,7 +199,7 @@ export function createWorkItemCapability(
               cites: input.cites,
               set: input.set,
             }),
-            writer.principalId()
+            attribution
           );
           return toWorkItemInfo(updated);
         } catch (error) {

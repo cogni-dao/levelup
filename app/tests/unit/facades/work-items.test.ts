@@ -303,7 +303,8 @@ describe("P0P1_IS_NODE_ADMIN — priority <= 1 needs node admin (story.5101)", (
       const store = withAuthority(false);
       const err = await patchWorkItem(
         { id: "task.5001", set: { priority } } as never,
-        { id: "agent-1", walletAddress: null }
+        { id: "agent-1", walletAddress: null },
+        { actor: "agent-1" }
       ).catch((e: unknown) => e);
       expect(err).toBeInstanceOf(NodeAdminRequiredError);
       expect((err as NodeAdminRequiredError).status).toBe(403);
@@ -316,12 +317,12 @@ describe("P0P1_IS_NODE_ADMIN — priority <= 1 needs node admin (story.5101)", (
     await expect(
       createWorkItem({ type: "task", title: "t", priority: 1 } as never, {
         id: "agent-1",
-      })
+      }, { actor: "agent-1" })
     ).rejects.toBeInstanceOf(NodeAdminRequiredError);
     expect(store.create).not.toHaveBeenCalled();
     await createWorkItem({ type: "task", title: "t", priority: 2 } as never, {
       id: "agent-1",
-    });
+    }, { actor: "agent-1" });
     expect(store.create).toHaveBeenCalledTimes(1);
   });
 
@@ -330,7 +331,7 @@ describe("P0P1_IS_NODE_ADMIN — priority <= 1 needs node admin (story.5101)", (
     await patchWorkItem({ id: "task.5001", set: { priority: 0 } } as never, {
       id: "u1",
       walletAddress: "0xabc",
-    });
+    }, { actor: "u1" });
     expect(store.patch).toHaveBeenCalledTimes(1);
   });
 });
