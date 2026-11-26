@@ -41,6 +41,7 @@ import {
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { backendUnavailable } from "../_backend-unavailable";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -113,12 +114,6 @@ export const PATCH = wrapRouteHandlerWithLogging<{
             errorCode: e.errorCode,
             body: { error: e.message, errorCode: e.errorCode, action: e.action },
           };
-        if (e instanceof WorkItemsBackendNotReadyError)
-          return {
-            status: 503,
-            errorCode: "backend_unavailable",
-            body: { error: e.message },
-          };
         return undefined;
       },
     });
@@ -179,7 +174,7 @@ export const DELETE = wrapRouteHandlerWithLogging<{
         return NextResponse.json({ error: e.message }, { status: 403 });
       }
       if (e instanceof WorkItemsBackendNotReadyError) {
-        return NextResponse.json({ error: e.message }, { status: 503 });
+        return backendUnavailable(ctx, e.reason);
       }
       throw e;
     }
