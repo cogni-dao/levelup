@@ -12,7 +12,7 @@ Read these node-template-owned entries with `COGNI_NODE_TEMPLATE_API_KEY` (on no
 - `GET https://node-template.cognidao.org/api/v1/knowledge/knowledge-usage-telemetry`
 - `GET https://node-template.cognidao.org/api/v1/knowledge/kpi-reading-semantics`
 
-Run the method against this node's own hub, `https://beacon.cognidao.org`, with its `COGNI_NODE_API_KEY`. Every metric and knowledge read the method names is relative to that base, never to node-template. Log reads 4 to 6 use `COGNI_OPERATOR_NODE_API_KEY` on `https://cognidao.org`, with node slug `beacon`.
+Run the method against this node's own hub, `https://levelup.cognidao.org`, with its `COGNI_NODE_API_KEY`. Every metric and knowledge read the method names is relative to that base, never to node-template. Log reads 4 to 6 use `COGNI_OPERATOR_NODE_API_KEY` on `https://cognidao.org`, with node slug `levelup`.
 
 No key yet? Register once with `POST https://node-template.cognidao.org/api/v1/agent/register` and `{"name":"<agent name>"}`, then save the key in the gitignored `.env.cogni`.
 
