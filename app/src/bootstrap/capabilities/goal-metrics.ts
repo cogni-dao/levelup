@@ -13,6 +13,7 @@ import {
 } from "@cogni-dao/metrics/knowledge";
 import { createKnowledgeUsageCalculator } from "@cogni-dao/metrics/usage";
 import type { Sql } from "postgres";
+import type { MetricsQueryPort } from "@/ports";
 import { getNodeId } from "@/shared/config";
 
 export { createGoalProgressReader, createGoalSource };

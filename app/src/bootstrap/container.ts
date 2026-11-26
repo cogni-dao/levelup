@@ -90,7 +90,7 @@ import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/priv
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { ScheduleRunReader } from "@cogni/scheduling";
 import { PostgresScheduleRunReader } from "@cogni/scheduling/adapters/postgres";
-import { createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort } from "@cogni/work-items";
+import { createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort, type WriteAttribution } from "@cogni/work-items";
 import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
 import {
@@ -843,9 +843,9 @@ function createContainer(): Container {
 				patch: {
 					value: async (
 						input: Parameters<WorkItemsDoltgresPort["patch"]>[0],
-						principalId: string,
+						attribution: WriteAttribution,
 					) => {
-						const item = await leased.patch(input, principalId);
+						const item = await leased.patch(input, attribution);
 						if (input.cites?.length) {
 							citePairs.record(item.id, item.revision, input.cites);
 						}
