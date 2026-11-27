@@ -187,14 +187,12 @@ export function createScopedGraphExecutor(params: {
       if (provider.requiresConnection) {
         if (!req.modelRef.connectionId) {
           throw new Error(
-            `Provider "${req.modelRef.providerKey}" requires a connection but modelRef.connectionId is missing. ` +
-              `Ensure the model picker sends connectionId and the status endpoint returns it.`
+            `Provider "${req.modelRef.providerKey}" requires a connection but modelRef.connectionId is missing. Ensure the model picker sends connectionId and the status endpoint returns it.`
           );
         }
         if (!params.broker) {
           throw new Error(
-            `Provider "${req.modelRef.providerKey}" requires a connection but ConnectionBroker is not configured. ` +
-              `Set CONNECTIONS_ENCRYPTION_KEY to enable BYO-AI.`
+            `Provider "${req.modelRef.providerKey}" requires a connection but ConnectionBroker is not configured. Set CONNECTIONS_ENCRYPTION_KEY to enable BYO-AI.`
           );
         }
       }
@@ -310,7 +308,7 @@ export function runGraphWithScope(params: {
       usageSource,
       runId: req.runId,
       ...(params.runKind ? { runKind: params.runKind } : {}),
-      ...(ctx?.actorUserId ? { actorUserId: ctx.actorUserId } : {}),
+      ...(ctx?.actorUserId ? { actorUserId: ctx.actorUserId, subjectUserId: ctx.actorUserId } : {}),
       ...(params.abortSignal ? { abortSignal: params.abortSignal } : {}),
     },
     () => executor.runGraph(req, ctx)

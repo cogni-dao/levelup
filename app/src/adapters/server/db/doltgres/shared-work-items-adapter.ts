@@ -1,121 +1,26 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
-/**
- * LevelUp's content upgrade preserves its existing v1 Dolt lease authority.
- * Both immutable adapters serialize through legacy advisory key 5001001.
- * The legacy reconciler treats scores as opaque; the new writer validates them.
- * No PostgreSQL lease migration, token conversion or database-only lock cutover.
- *
- * BOUNDED_CLAIM_OVERLAY (task.0056): the legacy claim overlay applies only to the
- * full-item agent list, and reads exactly the page's ids (limit = page length),
- * never a fixed 500-row window. Summary pages and board columns (the /work and
- * /dashboard read path) carry no claim fields and never touch the legacy adapter.
+/** Composition only: Dolt content retains bridge fencing; PostgreSQL is the sole lease authority.
+ * Activation requires applied schema, terminated legacy producers and proven expiry.
  */
-import type {
-  WorkItem,
-  WorkItemId,
-  WorkQuery,
-  WorkSummaryReadOptions,
-  WriteAttribution,
-} from "@cogni/work-items";
-import {
-  DoltgresWorkItemAdapter,
-  type DoltgresWorkItemAdapterOptions,
-  WorkItemAuthorizationError,
-  WorkItemLeaseConflictError,
-  WorkItemsBusyError,
-} from "@cogni/work-items/adapters/doltgres";
-import { DoltgresWorkItemAdapter as LegacyLeaseAdapter } from "@cogni/legacy-work-items/adapters/doltgres";
+import { withWorkItemLeases } from "@cogni/work-items";
+import { DoltgresWorkItemAdapter, type DoltgresWorkItemAdapterOptions } from "@cogni/work-items/adapters/doltgres";
+import { PostgresWorkItemLeaseAdapter } from "@cogni/work-items/adapters/postgres";
 import type { Sql } from "postgres";
-import type { WorkItemsDoltgresPort } from "@/ports/server";
 
-export { WorkItemAuthorizationError, WorkItemLeaseConflictError, WorkItemsBusyError };
+export { WorkItemAuthorizationError, WorkItemLeaseConflictError, WorkItemsBusyError } from "@cogni/work-items/adapters/doltgres";
 
-type Options = Omit<DoltgresWorkItemAdapterOptions, "idFloor" | "logger"> & {
-  readonly legacyClient?: Sql;
-};
-
-type Claim = Pick<WorkItem, "claimedByRun" | "claimedAt" | "lastCommand">;
-function project(item: WorkItem, claim: Claim | null): WorkItem {
-  const { claimedByRun: _run, claimedAt: _at, lastCommand: _command, ...content } = item;
-  return {
-    ...content,
-    ...(claim?.claimedByRun !== undefined && { claimedByRun: claim.claimedByRun }),
-    ...(claim?.claimedAt !== undefined && { claimedAt: claim.claimedAt }),
-    ...(claim?.lastCommand !== undefined && { lastCommand: claim.lastCommand }),
-  };
-}
-
-export class DoltgresLevelUpWorkItemAdapter implements WorkItemsDoltgresPort {
-  private readonly content: DoltgresWorkItemAdapter;
-  private readonly legacy: LegacyLeaseAdapter;
-  /** Insert-only artifacts (task.0028) live in the content store; leases never touch them. */
-  readonly artifacts: DoltgresWorkItemAdapter["artifacts"];
-
-  constructor(sql: Sql, logger?: DoltgresWorkItemAdapterOptions["logger"], options: Options = {}) {
-    const { legacyClient, ...contentOptions } = options;
-    this.content = new DoltgresWorkItemAdapter(sql, {
-      ...contentOptions, idFloor: 1, writerLockProtocol: "bridge",
-      ...(logger ? { logger } : {}),
-    });
-    this.artifacts = this.content.artifacts;
-    this.legacy = new LegacyLeaseAdapter(legacyClient ?? sql, {
-      idFloor: 1,
-      ...(options.recreateClient ? { recreateClient: options.recreateClient } : {}),
-      ...(logger ? { logger } : {}),
-    });
-  }
-
-  async get(id: WorkItemId): Promise<WorkItem | null> {
-    const item = await this.content.get(id);
-    return item ? project(item, await this.legacy.get(id)) : null;
-  }
-  async list(query?: WorkQuery) {
-    const result = await this.content.list(query);
-    if (!result.items.length) return result;
-    // One keyed read of this page's ids only; the page itself is already bounded.
-    const ids = result.items.map((item) => item.id);
-    const claims = await this.legacy.list({ ids, limit: ids.length });
-    const byId = new Map(claims.items.map((item) => [item.id, item]));
-    return { ...result, items: result.items.map((item) => project(item, byId.get(item.id) ?? null)) };
-  }
-  listSummaries(query?: WorkQuery, options?: WorkSummaryReadOptions) {
-    return this.content.listSummaries(query, options);
-  }
-  listBoardColumns(
-    query: WorkQuery,
-    statuses: readonly string[],
-    perColumn: number,
-    options?: { readonly signal?: AbortSignal },
-  ) {
-    return this.content.listBoardColumns(query, statuses, perColumn, options);
-  }
-  // Change reasons live in Dolt history of the content table; claims are lease-only.
-  history(id: WorkItemId) { return this.content.history(id); }
-  historyPage(...args: Parameters<DoltgresWorkItemAdapter["historyPage"]>) { return this.content.historyPage(...args); }
-  async create(...args: Parameters<WorkItemsDoltgresPort["create"]>) {
-    const item = await this.content.create(...args);
-    return project(item, await this.legacy.get(item.id));
-  }
-  async patch(...args: Parameters<WorkItemsDoltgresPort["patch"]>) {
-    const item = await this.content.patch(...args);
-    return project(item, await this.legacy.get(item.id));
-  }
-  // Keep LevelUp's existing authenticated DELETE endpoint compatible during adoption.
-  // The legacy delete records a bare actor id: it takes the attribution's actor (task.0175).
-  delete(id: WorkItemId, attribution: WriteAttribution) { return this.legacy.delete(id, attribution.actor); }
-  async claim(input: Parameters<WorkItemsDoltgresPort["claim"]>[0]) {
-    const claim = await this.legacy.claim(input);
-    return project((await this.content.get(input.id)) ?? claim, claim);
-  }
-  async heartbeat(input: Parameters<WorkItemsDoltgresPort["heartbeat"]>[0]) {
-    const claim = await this.legacy.heartbeat(input);
-    return project((await this.content.get(input.id)) ?? claim, claim);
-  }
-  async release(input: Parameters<WorkItemsDoltgresPort["release"]>[0]) {
-    const claim = await this.legacy.release(input);
-    return project((await this.content.get(input.id)) ?? claim, claim);
-  }
-  listRelations(id: WorkItemId) { return this.content.listRelations(id); }
+export function createLevelUpWorkItemStore(
+  contentSql: Sql,
+  serviceSql: Sql,
+  logger: DoltgresWorkItemAdapterOptions["logger"],
+  options: Omit<DoltgresWorkItemAdapterOptions, "idFloor" | "logger" | "writerLockProtocol"> = {},
+) {
+  const content = new DoltgresWorkItemAdapter(contentSql, {
+    ...options, idFloor: 1, writerLockProtocol: "bridge", ...(logger ? { logger } : {}),
+  });
+  return withWorkItemLeases(content, new PostgresWorkItemLeaseAdapter(serviceSql, {
+    ...(logger ? { logger } : {}),
+  }));
 }

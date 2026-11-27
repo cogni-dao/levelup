@@ -70,12 +70,4 @@ export type {
   WorkItemsPatchSet,
 } from "@cogni/work-items/adapters/doltgres";
 
-// Preserve this node's v1 Dolt lease contract while upgrading shared content.
-import type { WorkItemsContentPort } from "@cogni/work-items/adapters/doltgres";
-import type { WorkItemsDoltgresPort as LegacyWorkItemsPort } from "@cogni/legacy-work-items/adapters/doltgres";
-import type { WorkItem } from "@cogni/work-items";
-export type WorkItemsDoltgresPort = WorkItemsContentPort & {
-  [K in "claim" | "heartbeat" | "release"]: (
-    ...args: Parameters<LegacyWorkItemsPort[K]>
-  ) => Promise<WorkItem>;
-};
+export type { WorkItemsDoltgresPort } from "@cogni/work-items/adapters/doltgres";

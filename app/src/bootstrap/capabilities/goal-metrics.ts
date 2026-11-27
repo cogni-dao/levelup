@@ -4,7 +4,7 @@
  * tools are published in @cogni-dao/metrics and @cogni-dao/ai-tools; this
  * node binds its own id and its one goal-progress reader.
  */
-import { createMetricTools } from "@cogni/shared-ai-tools";
+import { createMetricTools } from "@cogni/ai-tools";
 import type { GoalsProgress, MetricService } from "@cogni-dao/metrics";
 import {
 	createGoalMetrics as createPublishedGoalMetrics,

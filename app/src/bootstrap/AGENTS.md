@@ -78,6 +78,8 @@ System setup installers were moved to `scripts/bootstrap/` and are out of scope 
 - `http/` - Route wrappers and rate limiting
 - `jobs/` - Job modules (advisory lock + container wiring for CLI-invoked tasks)
 
+Run write attribution reads principalId separately from subjectUserId; launchers never promote requester to actor. LevelUp content keeps bridge fencing; published Postgres leases use serviceDb. Activation requires producer expiry and applied migration.
+
 ## Responsibilities
 
 - This directory **does**:

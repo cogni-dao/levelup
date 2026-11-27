@@ -19,6 +19,8 @@ import type { VcsCapability } from "@cogni/ai-tools";
  * Nodes that need real VCS should use the operator's createVcsCapability factory.
  */
 export const stubVcsCapability: VcsCapability = {
+  getPr: async () => { throw new Error("VcsCapability not configured on this node."); },
+  compareCommits: async () => { throw new Error("VcsCapability not configured on this node."); },
   listPrs: async () => {
     throw new Error("VcsCapability not configured on this node.");
   },

@@ -13,7 +13,7 @@
  * @public
  */
 
-import { type LinkIntent, linkIntentStore } from "@cogni/node-shared";
+import { type LinkIntent, linkIntentStore } from "@cogni/node-shared/auth";
 import type { NextRequest } from "next/server";
 import NextAuth from "next-auth";
 import { decode } from "next-auth/jwt";
@@ -74,7 +74,6 @@ async function handler(
   // Clear link_intent cookie after processing (success or failure)
   // Use raw Set-Cookie header — works regardless of Response vs NextResponse
   if (isCallback && linkIntentCookie && res) {
-    // biome-ignore lint/style/noProcessEnv: auth infra runs before serverEnv() is available
     const secure = process.env.NODE_ENV === "production" ? "; Secure" : "";
     const headers = new Headers(res.headers);
     headers.append(

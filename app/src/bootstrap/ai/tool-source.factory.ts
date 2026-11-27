@@ -20,11 +20,6 @@
 import { createStaticToolSource, type StaticToolSource } from "@cogni/ai-core";
 import { type CatalogBoundTool, contractToRuntime } from "@cogni/ai-tools";
 
-import {
-  type CatalogBoundTool as SharedCatalogBoundTool,
-  contractToRuntime as sharedContractToRuntime,
-} from "@cogni/shared-ai-tools";
-
 import type { ToolBindings } from "./tool-bindings";
 
 /**
@@ -45,7 +40,7 @@ import type { ToolBindings } from "./tool-bindings";
 export function createBoundToolSource(
   contracts: readonly CatalogBoundTool[],
   bindings: ToolBindings,
-  sharedContracts: readonly SharedCatalogBoundTool[] = []
+  sharedContracts: readonly CatalogBoundTool[] = []
 ): StaticToolSource {
   const runtimes = [];
 
@@ -54,21 +49,20 @@ export function createBoundToolSource(
     const impl = bindings[toolId];
     if (!impl) {
       throw new Error(
-        `TOOL_BINDING_REQUIRED: Missing implementation binding for tool "${toolId}". ` +
-          `Add binding in src/bootstrap/ai/tool-bindings.ts`
+        `TOOL_BINDING_REQUIRED: Missing implementation binding for tool "${toolId}". Add binding in src/bootstrap/ai/tool-bindings.ts`
       );
     }
     runtimes.push(contractToRuntime(boundTool.contract, impl));
   }
 
-  // Each published/local schema uses its owning runtime compiler (Zod 4 / Zod 3).
+  // All contracts use the released compiler and retain their original schemas.
   for (const boundTool of sharedContracts) {
     const impl = bindings[boundTool.contract.name];
     if (!impl)
       throw new Error(
         `TOOL_BINDING_REQUIRED: Missing implementation binding for tool "${boundTool.contract.name}"`
       );
-    runtimes.push(sharedContractToRuntime(boundTool.contract, impl));
+    runtimes.push(contractToRuntime(boundTool.contract, impl));
   }
   return createStaticToolSource(runtimes);
 }

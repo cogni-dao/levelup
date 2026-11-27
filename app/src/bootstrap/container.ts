@@ -90,8 +90,8 @@ import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/priv
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { ScheduleRunReader } from "@cogni/scheduling";
 import { PostgresScheduleRunReader } from "@cogni/scheduling/adapters/postgres";
-import { createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort, type WriteAttribution } from "@cogni/work-items";
-import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
+import { createItemRefPorts, createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort, type WriteAttribution } from "@cogni/work-items";
+import { createLevelUpWorkItemStore } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
 import {
 	Client as TemporalClient,
@@ -118,7 +118,6 @@ import {
 	GitHubWebhookNormalizer,
 	getAppDb,
 	findExecutionScope,
-	getExecutionScope,
 	LangfuseAdapter,
 	LiteLlmAdapter,
 	type MimirAdapterConfig,
@@ -819,8 +818,8 @@ function createContainer(): Container {
 		const workItemsClient = createWorkItemsClient();
 		// Node stores start their allocator at 1; operator alone reserves the
 		// imported legacy range below 5000.
-		doltgresWorkItems = new DoltgresLevelUpWorkItemAdapter(workItemsClient, log, {
-			recreateClient: createWorkItemsClient, legacyClient: createWorkItemsClient(),
+		doltgresWorkItems = createLevelUpWorkItemStore(workItemsClient, serviceDb.$client, log, {
+			recreateClient: createWorkItemsClient,
 			// task.0086: pins a patch's cites to commits with lock-free reads on the
 			// knowledge pool, never on the writer connection that holds the lock.
 			entryResolver: createDoltgresEntryResolver(doltClient),
@@ -914,7 +913,7 @@ function createContainer(): Container {
 			knowledgeReadCounter,
 			() => {
 				const scope = findExecutionScope();
-				return scope ? { principalId: scope.actorUserId } : undefined;
+				return scope ? { principalId: scope.principalId } : undefined;
 			},
 		);
 		const edoResolver = new DoltgresEdoResolverAdapter({
@@ -1011,7 +1010,6 @@ function createContainer(): Container {
 	});
 	const workItemCapability = createWorkItemCapability({
 		workItemQuery: workItemAdapter,
-		workItemCommand: workItemAdapter,
 		moveReadings: moveMetrics.readings,
 		// task.0028: the latest artifact of each kind, without body, on the same item read the route serves.
 		artifacts: workItemArtifacts
@@ -1022,6 +1020,8 @@ function createContainer(): Container {
 		log: (event) => log.warn(event, "work.items.envelope_degraded"),
 		backlogReader: doltgresWorkItems,
 		backlogWriter: workItemWriters.backlogWriter,
+		artifactWriter: workItemWriters.artifacts,
+		refs: createItemRefPorts({ artifacts: doltgresWorkItems.artifacts, history: doltgresWorkItems }),
 	});
 
 	// ACTING_PRINCIPAL_FOR_WRITES (task.0133): a tool never builds an attribution; the host binds the run's at each call.

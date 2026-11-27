@@ -50,6 +50,8 @@ Drizzle ORM table definitions for all database domains. Provides type-safe schem
   - `@cogni/db-schema/attribution` - Attribution pipeline tables (`epochs`, `ingestionReceipts`, `epochSelection`, `epochReceiptClaimants`, `epochUserProjections`, `epochReviewSubjectOverrides`, `epochFinalClaimantAllocations`, `ingestionCursors`, `epochPoolComponents`, `epochStatements`, `epochStatementSignatures`)
 - **Files considered API:** All `src/*.ts` files via package.json exports
 
+Operational `workItemLeases` is exported from the root barrel. It is service-only (ENABLE/FORCE RLS, no app policy); content stays in Doltgres.
+
 ## Ports
 
 - **Uses ports:** none

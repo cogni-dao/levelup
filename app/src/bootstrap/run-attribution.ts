@@ -6,7 +6,7 @@
  * Purpose: This node's one binding of `@cogni/work-items` `createRunAttribution`: the run scope it reads and the logger it writes to.
  * Scope: Composition only. The builders (`actingPrincipal`, `routeAttribution`, `runAttribution`, `attributionFields`) live in the package.
  * Invariants:
- *   - ACTOR_IS_THE_RUN_IDENTITY: this node has no subject/principal split, so the run's `actorUserId` is the acting principal and no requester is recorded.
+ *   - ACTOR_IS_THE_RUN_IDENTITY: the catalog principal is distinct from the requester; missing principal fails closed.
  * Side-effects: none at import
  * @internal
  */
@@ -17,8 +17,8 @@ import { makeLogger } from "@/shared/observability";
 
 /** The run facts the package builds an attribution from, read from the current execution scope. */
 export function runAttributionScope(): RunAttributionScope {
-  const { actorUserId, runId, runKind } = getExecutionScope();
-  return { principalId: actorUserId, runId, runKind };
+  const { principalId, subjectUserId, runId, runKind } = getExecutionScope();
+  return { principalId, subjectUserId, runId, runKind };
 }
 
 /** The attribution of a write made by a graph tool: the current run's acting identity and run. */

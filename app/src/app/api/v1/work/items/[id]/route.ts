@@ -4,44 +4,39 @@
 /**
  * Module: `@app/api/v1/work/items/[id]/route`
  * Purpose: HTTP endpoints for getting, patching, and deleting a single work item by ID.
- * Scope: Auth-protected GET (node-local Doltgres first, markdown fallback), PATCH (Doltgres only), and DELETE (Doltgres hard-delete with dolt_log audit).
- * Invariants: VALIDATE_IO, CONTRACTS_ARE_TRUTH, AUTH_VIA_GETSESSIONUSER, PATCH_ALLOWLIST, HARD_DELETE_RECOVERABLE_VIA_DOLT_REVERT.
+ * Scope: Auth-protected GET (node-local Doltgres first, markdown fallback), PATCH (Doltgres only), and DELETE (retired, HTTP410 with revisioned cancellation advice).
+ * Invariants: VALIDATE_IO, CONTRACTS_ARE_TRUTH, AUTH_VIA_GETSESSIONUSER, PATCH_ALLOWLIST, DELETE_PRESERVES_CONTENT_AND_HISTORY.
  * Write errors (task.0097): `workItemWriteErrorResponse` from @cogni/work-items answers every write-contract error below; this route keeps only auth, 403, 404, node-admin and backend-unavailable.
  * Reason + cites (task.0086): a missing or over-cap reason is HTTP 400 `invalid input` with an issue at `reason`; an unknown cite id or a closed inbox is HTTP 400 `cite_unresolved`; cites with no resolver wired is HTTP 400 `cites_unsupported`; a resolver failure is HTTP 503. Nothing is written in each case.
  * Moves (story.0033): `set.moves` with an unknown or deprecated metric id is HTTP 400 `cite_unresolved` with an issue at `set.moves`; a bad list is HTTP 400 `invalid input`; a non-empty list with no metric wiring is HTTP 400 `moves_unsupported`; a resolver failure is HTTP 503 `cite_resolver_unavailable`; a baseline failure is HTTP 503 `metric_baseline_unavailable`. The client never sets a baseline: the server pins it.
  * Envelope (task.0118): GET returns each `moves` entry with its metric, KPI and goal; `?include=links` adds the first page of citation links (same read as /api/v1/citations/{id}); an unknown include is HTTP 400.
  * Read core (story.0085): `handleWorkItemGet` from @cogni/work-items parses `include`/`artifact`, refuses 400/404 and returns the one
  *   terminal event; this route keeps only auth and the store read.
- * Side-effects: IO (HTTP response, filesystem read via port, Doltgres read/write/delete)
+ * Side-effects: IO (HTTP response, filesystem read via port, Doltgres read/write)
  * Links: contracts/work.items.{get,patch,delete}.v1.contract
  * @public
  */
 
 import {
-  workItemsDeleteOperation,
   workItemsGetOperation,
   workItemsPatchOperation,
 } from "@cogni/node-contracts";
 import {
   handleWorkItemGet,
   handleWorkItemPatch,
-  workItemWriteErrorResponse,
   routeAttribution,
 } from "@cogni/work-items";
 import { NextResponse } from "next/server";
 
 import {
-  deleteWorkItem,
   getWorkItem,
   patchWorkItem,
   WorkItemForbiddenError,
   WorkItemNotFoundError,
-  WorkItemsBackendNotReadyError,
   NodeAdminRequiredError,
 } from "@/app/_facades/work/items.server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { backendUnavailable } from "../_backend-unavailable";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -122,61 +117,11 @@ export const PATCH = wrapRouteHandlerWithLogging<{
   }
 );
 
-/**
- * DELETE /api/v1/work/items/:id — Hard-delete a work item from Doltgres.
- *
- * The deletion is captured as a dolt_log commit; recovery via dolt_revert
- * remains available. Idempotent at the contract level: a missing id returns 404,
- * not 500. Returns `{id, deleted: true}` on success.
- */
-export const DELETE = wrapRouteHandlerWithLogging<{
-  params: Promise<{ id: string }>;
-}>(
+/** Retired: cancel with PATCH, a reason and the current expectedRevision. */
+export const DELETE = wrapRouteHandlerWithLogging<{ params: Promise<{ id: string }> }>(
   { routeId: "work.items.delete", auth: { mode: "required", getSessionUser } },
-  async (ctx, _request, sessionUser, context) => {
-    if (!context) throw new Error("context required for dynamic routes");
-    if (!sessionUser) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-
-    const { id } = await context.params;
-
-    const inputParse = workItemsDeleteOperation.input.safeParse({ id });
-    if (!inputParse.success) {
-      return NextResponse.json(
-        { error: "invalid input", issues: inputParse.error.issues },
-        { status: 400 }
-      );
-    }
-
-    try {
-      const deleted = await deleteWorkItem(id, {
-        id: sessionUser.id,
-      });
-      if (!deleted) {
-        return NextResponse.json(
-          { error: `Work item not found: ${id}` },
-          { status: 404 }
-        );
-      }
-      ctx.log.info({ workItemId: id }, "work.items.delete_success");
-      return NextResponse.json(
-        workItemsDeleteOperation.output.parse({ id, deleted: true })
-      );
-    } catch (e) {
-      // The package owns every write-contract answer (scores, reason, cites, moves, revision
-      // conflict, write outcome unknown, resolver and baseline failures) and matches by name.
-      const mapped = workItemWriteErrorResponse(e, "patch");
-      if (mapped) {
-        return NextResponse.json(mapped.body, { status: mapped.status });
-      }
-      if (e instanceof WorkItemForbiddenError) {
-        return NextResponse.json({ error: e.message }, { status: 403 });
-      }
-      if (e instanceof WorkItemsBackendNotReadyError) {
-        return backendUnavailable(ctx, e.reason);
-      }
-      throw e;
-    }
-  }
+  async () => NextResponse.json({
+    error: "Work-item deletion is retired; use PATCH with set.status=cancelled, reason and expectedRevision.",
+    errorCode: "work_item_delete_retired",
+  }, { status: 410 }),
 );

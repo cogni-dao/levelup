@@ -3,13 +3,13 @@
 
 /**
  * Module: `@bootstrap/capabilities/work-item`
- * Purpose: Factory for WorkItemCapability — bridges ai-tools interface to WorkItemQueryPort + WorkItemCommandPort.
+ * Purpose: Factory for WorkItemCapability — bridges ai-tools interface to WorkItemQueryPort + the authoritative Dolt patch.
  * Scope: Creates WorkItemCapability that delegates to hexagonal ports. Does not implement transport.
  * Invariants:
  *   - PORTS_ARE_AUTHORITY: All operations delegate to WorkItemQueryPort/WorkItemCommandPort
- *   - TRANSITION_TABLE_ENFORCED: CommandPort validates transitions
+ *   - TRANSITION_TABLE_ENFORCED: the released Dolt patch validates status moves
  *   - PATCH_REASON_AND_CITES (task.0086): the required `reason` and the optional `cites` are forwarded to the Doltgres store, the one enforcer;
- *     the markdown fallback (development only) has no history and ignores both, though the tool schema still requires a reason.
+ *     an absent durable writer refuses rather than writing through the markdown fallback.
  *   - MOVES_READ_AT_READ_TIME (story.0033): a read that returns exactly one item (core__work_item_read) adds each move's baseline,
  *     current reading and verdict from `moveReadings`; a list read returns the stored moves only, so a page costs no metric lookup.
  *   - ONE_ITEM_ENVELOPE (task.0118): `read` is the single-item envelope: it also adds each move's metric, KPI and goal (`moveReadings.context`) and, on request, the first page of citation links (`links`); both through the package's `composeItemEnvelope`; `query` and `queryPage` never do.
@@ -22,11 +22,9 @@ import type {
   WorkItemCapability,
   WorkItemInfo,
   WorkItemQueryParams,
-  WorkItemTransitionResult,
-} from "@cogni/shared-ai-tools";
+} from "@cogni/ai-tools";
 import type {
   ActorKind,
-  WorkItemCommandPort,
   WorkItemQueryPort,
   WorkItemStatus,
   WorkItemType,
@@ -35,29 +33,29 @@ import type {
 import type {
   EnvelopeDegradedEvent,
   ItemArtifactsPort,
+  createWorkItemWriters,
+  ItemRefPorts,
   ItemLinksPort,
   MoveReadingPort,
 } from "@cogni/work-items";
 import {
   composeItemEnvelope,
+  recordWorkItemArtifact,
+  artifactsNotConfigured,
   judgeMoveSummaries,
   toWorkItemDto as toWorkItemInfo,
   toWorkItemId,
   toWorkItemsPatchInput,
 } from "@cogni/work-items";
-import { WorkItemPatchConflictError } from "@cogni/shared-ai-tools";
+import { WorkItemPatchConflictError } from "@cogni/ai-tools";
+import { WorkItemRevisionConflictError } from "@cogni/work-items/adapters/doltgres";
 import type { WorkItemsDoltgresPort } from "@/ports/server";
-
-/** The patch `set` without explicit-undefined keys (the route facade drops them the same way). */
-const definedOnly = (set: object): object =>
-  Object.fromEntries(Object.entries(set).filter(([, v]) => v !== undefined));
 
 /**
  * Dependencies for creating the work item capability.
  */
 export interface WorkItemCapabilityDeps {
   readonly workItemQuery: WorkItemQueryPort;
-  readonly workItemCommand: WorkItemCommandPort;
   readonly backlogReader?: Pick<WorkItemQueryPort, "list">;
   /** Reads the metrics a single item moves; absent means no metrics service (every move reads `unknown`). */
   readonly moveReadings?: MoveReadingPort | undefined;
@@ -66,6 +64,8 @@ export interface WorkItemCapabilityDeps {
   /** The latest artifact of each kind (task.0028); absent: the item reads without `artifacts`. */
   readonly artifacts?: ItemArtifactsPort | undefined;
   /** One event per degraded envelope part (chain or links). */
+  readonly refs?: ItemRefPorts | undefined;
+  readonly artifactWriter?: ReturnType<typeof createWorkItemWriters>["artifacts"] | undefined;
   readonly log?: ((event: EnvelopeDegradedEvent) => void) | undefined;
   readonly backlogWriter?: {
     readonly store: Pick<WorkItemsDoltgresPort, "patch">;
@@ -82,7 +82,7 @@ export interface WorkItemCapabilityDeps {
 export function createWorkItemCapability(
   deps: WorkItemCapabilityDeps
 ): WorkItemCapability {
-  const { workItemQuery, workItemCommand } = deps;
+  const { workItemQuery, artifactWriter } = deps;
 
   function list(params: WorkItemQueryParams) {
     return (deps.backlogReader ?? workItemQuery).list({
@@ -128,7 +128,7 @@ export function createWorkItemCapability(
      * item with each move's readings, verdict and metric → KPI → goal chain, and with `includeLinks`
      * the first page of citation links.
      */
-    async read(id, options): Promise<WorkItemInfo | null> {
+    async read(id, options) {
       const result = await list({ ids: [id], limit: 1 });
       const item = result.items
         .map(toWorkItemInfo)
@@ -137,8 +137,8 @@ export function createWorkItemCapability(
       // ONE_COMPOSITION: the same `composeItemEnvelope` the HTTP facade calls.
       return composeItemEnvelope(
         item,
-        { readings: deps.moveReadings, links: deps.links, artifacts: deps.artifacts, log: deps.log },
-        { includeLinks: options?.includeLinks === true }
+        { readings: deps.moveReadings, links: deps.links, artifacts: deps.artifacts, ...deps.refs, log: deps.log },
+        { ...options }
       );
     },
 
@@ -158,26 +158,15 @@ export function createWorkItemCapability(
       };
     },
 
-    async transitionStatus(input): Promise<WorkItemTransitionResult> {
-      const current = await workItemQuery.get(toWorkItemId(input.id));
-      if (!current) {
-        throw new Error(`Work item not found: ${input.id}`);
-      }
-
-      const updated = await workItemCommand.transitionStatus({
-        id: toWorkItemId(input.id),
-        expectedRevision: String(current.revision),
-        toStatus: input.toStatus as WorkItemStatus,
-        ...(input.reason && { reason: input.reason }),
-      });
-
-      return {
-        id: updated.id,
-        previousStatus: current.status,
-        newStatus: updated.status,
-        revision: updated.revision as number,
-      };
-    },
+    ...(artifactWriter ? { recordArtifact: async (input: { id: string; body: unknown }) => {
+      const writer = artifactWriter;
+      const store = writer.deps();
+      if (!store) return artifactsNotConfigured(input.id, "write");
+      const attribution = writer.attribution();
+      const result = await recordWorkItemArtifact(store, input.id, attribution, input.body);
+      writer.log(result.log, attribution);
+      return result;
+    } } : {}),
 
     async patch(input): Promise<WorkItemInfo> {
       const writer = deps.backlogWriter;
@@ -203,28 +192,13 @@ export function createWorkItemCapability(
           );
           return toWorkItemInfo(updated);
         } catch (error) {
-          if ((error as Error)?.name === "WorkItemRevisionConflictError") {
-            const conflict = error as { id: string; expectedRevision: number; currentRevision: number };
-            throw new WorkItemPatchConflictError(conflict.id, conflict.expectedRevision, conflict.currentRevision);
+          if (error instanceof WorkItemRevisionConflictError) {
+            throw new WorkItemPatchConflictError(error.id, error.expectedRevision, error.currentRevision);
           }
           throw error;
         }
       }
-      if (input.expectedRevision !== undefined) throw new Error("Doltgres backlog writer unavailable");
-      const current = await workItemQuery.get(toWorkItemId(input.id));
-      if (!current) {
-        throw new Error(`Work item not found: ${input.id}`);
-      }
-
-      const updated = await workItemCommand.patch({
-        id: toWorkItemId(input.id),
-        expectedRevision: String(current.revision),
-        set: definedOnly(input.set) as NonNullable<
-          Parameters<typeof workItemCommand.patch>[0]["set"]
-        >,
-      });
-
-      return toWorkItemInfo(updated);
+      throw new Error("Doltgres backlog writer unavailable");
     },
   };
 }

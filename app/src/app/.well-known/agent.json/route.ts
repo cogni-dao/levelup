@@ -26,7 +26,6 @@ import {
 	workItemsClaimOperation,
 	workItemsCoordinationOperation,
 	workItemsCreateOperation,
-	workItemsDeleteOperation,
 	workItemsGetOperation,
 	workItemsHeartbeatOperation,
 	workItemsHistoryOperation,
@@ -130,13 +129,6 @@ export async function GET(request: Request) {
 				auth: { type: "bearer" },
 				inputSchema: z.toJSONSchema(workItemsPatchOperation.input),
 				outputSchema: z.toJSONSchema(workItemsPatchOperation.output),
-			},
-			deleteWorkItem: {
-				method: "DELETE",
-				endpoint: `${origin}/api/v1/work/items/{id}`,
-				auth: { type: "bearer" },
-				inputSchema: z.toJSONSchema(workItemsDeleteOperation.input),
-				outputSchema: z.toJSONSchema(workItemsDeleteOperation.output),
 			},
 			claimWorkItem: {
 				method: "POST",

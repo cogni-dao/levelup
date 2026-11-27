@@ -21,7 +21,7 @@ import {
 } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { DoltgresLevelUpWorkItemAdapter } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
+import { createLevelUpWorkItemStore } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, "../../../..");
@@ -39,6 +39,8 @@ const PASSWORD = "doltgres";
 
 describe("Doltgres 0.57.3 work-item acceptance", () => {
 	let container: StartedTestContainer;
+  let leaseContainer: StartedTestContainer;
+  let leaseSql: Sql;
 	let sql: Sql;
 	let dbUrl: string;
 	const stageLogger = {
@@ -78,21 +80,31 @@ describe("Doltgres 0.57.3 work-item acceptance", () => {
 			stdio: "pipe",
 		});
 		sql = postgres(dbUrl, { max: 1, fetch_types: false });
+    leaseContainer = await new GenericContainer("postgres:16-alpine")
+      .withEnvironment({ POSTGRES_PASSWORD: "leases-test", POSTGRES_DB: "leases_test" })
+      .withExposedPorts(5432).withWaitStrategy(Wait.forLogMessage(/database system is ready to accept connections/, 2)).start();
+    const leaseUrl = `postgresql://postgres:leases-test@${leaseContainer.getHost()}:${leaseContainer.getMappedPort(5432)}/leases_test`;
+    execFileSync(process.execPath, [path.resolve(REPO_ROOT, "scripts/db/migrate.mjs"), path.resolve(REPO_ROOT, "app/src/adapters/server/db/migrations")], {
+      env: { ...process.env, DATABASE_URL: leaseUrl, NODE_NAME: "levelup-test" }, encoding: "utf8", stdio: "pipe",
+    });
+    leaseSql = postgres(leaseUrl, { max: 2 });
 	}, 180_000);
 
 	afterAll(async () => {
 		if (sql) await sql.end({ timeout: 5 });
+    if (leaseSql) await leaseSql.end({ timeout: 5 });
+    if (leaseContainer) await leaseContainer.stop();
 		if (container) await container.stop();
 	});
 
-  it("composes published scores and v1 leases without changing protected content", async () => {
+  it("composes published content and Postgres leases without mutating content revisions", async () => {
     const pools: Sql[] = [];
     const client = () => {
       const pool = postgres(dbUrl, { max: 1, fetch_types: false });
       pools.push(pool);
       return pool;
     };
-    const adapter = new DoltgresLevelUpWorkItemAdapter(client(), stageLogger, { legacyClient: client(), recreateClient: client });
+    const adapter = createLevelUpWorkItemStore(client(), leaseSql, stageLogger, { recreateClient: client });
     const id = toWorkItemId("task.9598");
     const owner = "baseline-owner";
     const collaborator = "baseline-collaborator";
@@ -104,20 +116,24 @@ describe("Doltgres 0.57.3 work-item acceptance", () => {
       await expect(adapter.patch({ id, expectedRevision: created.revision, reason: "clear the baseline scores", set: { scores: null } }, { actor: collaborator })).rejects.toMatchObject({ name: "WorkItemRevisionConflictError" });
       expect(await adapter.get(id)).toMatchObject({ title: "Shared evaluation composition", scores, revision: scored.revision });
       const claimed = await adapter.claim({ id, runId: "baseline-run", command: "/baseline", principalId: owner });
-      expect(claimed.claimedByRun).toBe("baseline-run");
-      expect(claimed.scores).toEqual(scores);
-      expect(claimed.revision).toBeGreaterThan(scored.revision);
+      expect(claimed.runId).toBe("baseline-run");
+      expect(claimed.leaseToken).toBeTruthy();
+      expect((await adapter.get(id))?.revision).toBe(scored.revision);
       expect((await adapter.get(id))?.claimedByRun).toBe("baseline-run");
       expect((await adapter.list({ ids: [id] })).items[0]).toMatchObject({ scores, claimedByRun: "baseline-run" });
       await expect(adapter.claim({ id, runId: "intruder", command: "/baseline", principalId: collaborator })).rejects.toMatchObject({ name: "WorkItemLeaseConflictError" });
-      const beat = await adapter.heartbeat({ id, runId: "baseline-run", principalId: owner });
-      expect(beat.scores).toEqual(scores);
-      const released = await adapter.release({ id, runId: "baseline-run", principalId: owner });
-      expect(released.claimedByRun).toBeUndefined();
-      expect(released.scores).toEqual(scores);
-      const cleared = await adapter.patch({ id, expectedRevision: released.revision, reason: "clear the baseline scores", set: { scores: null } }, { actor: collaborator });
+      const beat = await adapter.heartbeat({ id, runId: "baseline-run", principalId: owner, leaseToken: claimed.leaseToken });
+      expect(beat.active).toBe(true);
+      expect(beat.leaseToken).toBe(claimed.leaseToken);
+      const released = await adapter.release({ id, runId: "baseline-run", principalId: owner, leaseToken: claimed.leaseToken });
+      expect(released.active).toBe(false);
+      expect((await adapter.get(id))?.claimedByRun).toBeUndefined();
+      const cleared = await adapter.patch({ id, expectedRevision: scored.revision, reason: "clear the baseline scores", set: { scores: null } }, { actor: collaborator });
       expect(cleared.scores).toBeUndefined();
-      await expect(adapter.delete(id, { actor: owner })).resolves.toBe(true);
+      await expect(adapter.delete(id, { actor: owner })).rejects.toMatchObject({ name: "WorkItemDeletionRetiredError" });
+      const cancelled = await adapter.patch({ id, expectedRevision: cleared.revision, reason: "Cancel the completed fixture", set: { status: "cancelled" } }, { actor: owner });
+      expect(cancelled.status).toBe("cancelled");
+      expect((await adapter.history?.(id))?.length).toBeGreaterThan(1);
     } finally {
       await Promise.all(pools.map((pool) => pool.end({ timeout: 0 }).catch(() => undefined)));
     }

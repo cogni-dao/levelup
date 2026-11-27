@@ -25,7 +25,6 @@ import {
   createToolRunner,
 } from "@cogni/ai-core";
 import type { CatalogBoundTool } from "@cogni/ai-tools";
-import type { CatalogBoundTool as SharedCatalogBoundTool } from "@cogni/shared-ai-tools";
 import {
   type CompletionFn,
   type CreateGraphFn,
@@ -99,7 +98,7 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
   readonly providerId = LANGGRAPH_PROVIDER_ID;
   private readonly log: Logger;
   private readonly catalog: LangGraphCatalog<CreateGraphFn>;
-  private readonly boundToolMap: ReadonlyMap<string, CatalogBoundTool | SharedCatalogBoundTool
+  private readonly boundToolMap: ReadonlyMap<string, CatalogBoundTool
   >;
 
   constructor(
@@ -107,7 +106,7 @@ export class LangGraphInProcProvider implements GraphExecutorPort {
     private readonly toolSource: ToolSourcePort,
     private readonly getMcpToolSource: () => Promise<ToolSourcePort | null> = () =>
       Promise.resolve(null),
-    nodeBundle: readonly (CatalogBoundTool | SharedCatalogBoundTool)[] = [],
+    nodeBundle: readonly (CatalogBoundTool)[] = [],
     catalog: LangGraphCatalog<CreateGraphFn> = LANGGRAPH_CATALOG as LangGraphCatalog<CreateGraphFn>
   ) {
     this.log = makeLogger({ component: "LangGraphInProcProvider" });
