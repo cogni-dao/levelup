@@ -22,35 +22,37 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const GET = wrapRouteHandlerWithLogging<{
-  params: Promise<{ id: string }>;
+	params: Promise<{ id: string }>;
 }>(
-  { routeId: "work.items.history", auth: { mode: "required", getSessionUser } },
-  async (ctx, _request, sessionUser, context) => {
-    if (!sessionUser) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-    if (!context) throw new Error("context required for dynamic routes");
-    const { id } = await context.params;
-    const startedAt = Date.now();
-    const { status, body, log } = await readWorkItemHistory(
-      getContainer().doltgresWorkItems,
-      id
-    );
-    const { event, errorName, ...fields } = log;
-    // The package owns the event name; the node registers none.
-    ctx.log.info(
-      {
-        event,
-        reqId: ctx.reqId,
-        routeId: ctx.routeId,
-        ...fields,
-        durationMs: Date.now() - startedAt,
-      },
-      event
-    );
-    if (errorName !== undefined) {
-      ctx.log.warn({ errorName }, "work.items.history_unavailable");
-    }
-    return NextResponse.json(body, { status });
-  }
+	{ routeId: "work.items.history", auth: { mode: "required", getSessionUser } },
+	async (ctx, request, sessionUser, context) => {
+		if (!sessionUser) {
+			return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+		}
+		if (!context) throw new Error("context required for dynamic routes");
+		const { id } = await context.params;
+		const startedAt = Date.now();
+		const params = new URL(request.url).searchParams;
+		const { status, body, log } = await readWorkItemHistory(
+			getContainer().doltgresWorkItems,
+			id,
+			{ view: params.get("view"), cursor: params.get("cursor") },
+		);
+		const { event, errorName, ...fields } = log;
+		// The package owns the event name; the node registers none.
+		ctx.log.info(
+			{
+				event,
+				reqId: ctx.reqId,
+				routeId: ctx.routeId,
+				...fields,
+				durationMs: Date.now() - startedAt,
+			},
+			event,
+		);
+		if (errorName !== undefined) {
+			ctx.log.warn({ errorName }, "work.items.history_unavailable");
+		}
+		return NextResponse.json(body, { status });
+	},
 );
