@@ -14,15 +14,38 @@
  */
 
 import type { AiEvent, ToolSourcePort } from "@cogni/ai-core";
-import { TOOL_CATALOG, toBoundToolRuntime } from "@cogni/ai-tools";
-import { describe, expect, it, vi } from "vitest";
-
+import {
+  CORE_TOOL_BUNDLE,
+  TOOL_CATALOG,
+  toBoundToolRuntime,
+} from "@cogni/ai-tools";
+import { LANGGRAPH_CATALOG as PRODUCT_CATALOG } from "@cogni/langgraph-graphs";
+import {
+  LANGGRAPH_CATALOG,
+  LEVELUP_TOOL_IDS,
+} from "@cogni/node-template-graphs";
+import { NextRequest } from "next/server";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { runInScope } from "@/adapters/server/ai/execution-scope";
 import type { CompletionUnitAdapter } from "@/adapters/server/ai/langgraph/inproc.provider";
 import { LangGraphInProcProvider } from "@/adapters/server/ai/langgraph/inproc.provider";
-import type { GraphRunRequest } from "@/ports";
+import { LangGraphInProcAgentCatalogProvider } from "@/adapters/server/ai/langgraph/inproc-agent-catalog.provider";
+import { LEVELUP_CORE_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
+import { routeLangGraphProvider } from "@/bootstrap/langgraph-routing";
+import type { GraphRunRequest, LlmService } from "@/ports";
+
+vi.mock("@/shared/observability", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/shared/observability")>()),
+  makeLogger: () => ({
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  }),
+}));
 
 const TEST_SCOPE = {
+  llmService: {} as LlmService,
   billing: {
     billingAccountId: "test-billing",
     virtualKeyId: "test-vkey",
@@ -38,7 +61,7 @@ const TEST_SCOPE = {
  * Collect all events from stream into array.
  */
 async function collectEvents(
-  stream: AsyncIterable<AiEvent>
+  stream: AsyncIterable<AiEvent>,
 ): Promise<AiEvent[]> {
   return runInScope(TEST_SCOPE, async () => {
     const events: AiEvent[] = [];
@@ -98,7 +121,7 @@ function createMockToolSource(): ToolSourcePort {
     Object.entries(TOOL_CATALOG).map(([id, tool]) => [
       id,
       toBoundToolRuntime(tool),
-    ])
+    ]),
   );
 
   return {
@@ -112,7 +135,7 @@ function createMockToolSource(): ToolSourcePort {
  * Create a minimal GraphRunRequest for testing.
  */
 function createTestRequest(
-  overrides?: Partial<GraphRunRequest>
+  overrides?: Partial<GraphRunRequest>,
 ): GraphRunRequest {
   return {
     runId: "test-run-id",
@@ -139,7 +162,7 @@ describe("LangGraphInProcProvider", () => {
         const mockToolSource = createMockToolSource();
         const provider = new LangGraphInProcProvider(
           mockAdapter,
-          mockToolSource
+          mockToolSource,
         );
 
         const request = createTestRequest({ graphId: "langgraph:poet" });
@@ -158,7 +181,7 @@ describe("LangGraphInProcProvider", () => {
 
         // Terminal events present
         const assistantFinals = events.filter(
-          (e) => e.type === "assistant_final"
+          (e) => e.type === "assistant_final",
         );
         const dones = events.filter((e) => e.type === "done");
         expect(assistantFinals).toHaveLength(1);
@@ -180,7 +203,7 @@ describe("LangGraphInProcProvider", () => {
         const mockToolSource = createMockToolSource();
         const provider = new LangGraphInProcProvider(
           mockAdapter,
-          mockToolSource
+          mockToolSource,
         );
 
         // Request with graph not in catalog
@@ -218,7 +241,7 @@ describe("LangGraphInProcProvider", () => {
         const mockToolSource = createMockToolSource();
         const provider = new LangGraphInProcProvider(
           mockAdapter,
-          mockToolSource
+          mockToolSource,
         );
 
         // Request with wrong provider prefix
@@ -247,4 +270,219 @@ describe("LangGraphInProcProvider", () => {
       });
     });
   });
+});
+
+describe("LevelUp catalog and routing", () => {
+  it("preserves every product graph and the exact tool allowlist, with one discovery catalog", () => {
+    for (const [id, product] of Object.entries(PRODUCT_CATALOG)) {
+      expect(LANGGRAPH_CATALOG[id]?.graphFactory).toBe(product.graphFactory);
+      expect(LANGGRAPH_CATALOG[id]?.toolIds).toEqual(product.toolIds);
+    }
+    expect(LEVELUP_CORE_TOOL_BUNDLE.map((t) => t.contract.name).sort()).toEqual(
+      CORE_TOOL_BUNDLE.filter((t) =>
+        new Set<string>(LEVELUP_TOOL_IDS).has(t.contract.name),
+      )
+        .map((t) => t.contract.name)
+        .sort(),
+    );
+    expect(LANGGRAPH_CATALOG["work-prioritizer"]).toMatchObject({
+      principal: "prioritizer",
+      program: "work-review",
+    });
+    expect(LANGGRAPH_CATALOG["work-closeout"]).toBeUndefined();
+    expect(
+      LANGGRAPH_CATALOG.cogni?.toolIds.every((id) =>
+        new Set<string>(LEVELUP_TOOL_IDS).has(id),
+      ),
+    ).toBe(true);
+    const discovered = new LangGraphInProcAgentCatalogProvider(
+      LANGGRAPH_CATALOG,
+    )
+      .listAgents()
+      .map((a) => a.graphId)
+      .sort();
+    expect(discovered).toEqual(
+      Object.keys(LANGGRAPH_CATALOG)
+        .map((id) => `langgraph:${id}`)
+        .sort(),
+    );
+    for (const graphId of Object.keys(LANGGRAPH_CATALOG))
+      expect(LANGGRAPH_CATALOG.cogni?.systemPrompt).toContain(graphId);
+  });
+
+  it("keeps programs and product writers in process even with dev configured", () => {
+    const result = {
+      stream: (async function* () {})(),
+      final: Promise.resolve({ ok: true, runId: "r", requestId: "r" }),
+    };
+    const inproc = { runGraph: vi.fn(() => result) };
+    const dev = { runGraph: vi.fn(() => result) };
+    const router = routeLangGraphProvider(inproc, dev);
+    for (const id of [
+      "cogni",
+      "work-prioritizer",
+      "brain",
+      "autoresearch-single-lane",
+    ])
+      router.runGraph(createTestRequest({ graphId: `langgraph:${id}` }));
+    expect(inproc.runGraph).toHaveBeenCalledTimes(4);
+    expect(dev.runGraph).not.toHaveBeenCalled();
+    router.runGraph(createTestRequest({ graphId: "langgraph:poet" }));
+    expect(dev.runGraph).toHaveBeenCalledTimes(1);
+  });
+});
+
+it("runs the retained product graph with native model-facing schemas through the published provider", async () => {
+  const adapter = createMockAdapter();
+  const provider = new LangGraphInProcProvider(
+    adapter,
+    createMockToolSource(),
+    undefined,
+    LEVELUP_CORE_TOOL_BUNDLE,
+    LANGGRAPH_CATALOG,
+    {
+      authority: {
+        resolvePrincipal: async () => "fixture-principal",
+        guardDeps: {
+          withStore: async (fn) =>
+            fn({
+              liveScopes: async () => [],
+            } as unknown as import("@cogni/agent-grants").AgentGrantsStore),
+          adminCheck: async () => "denied",
+        },
+      },
+    },
+  );
+  await runInScope(
+    { ...TEST_SCOPE, subjectUserId: "fixture-subject" },
+    async () => {
+      const run = provider.runGraph(
+        createTestRequest({ graphId: "langgraph:brain" }),
+      );
+      for await (const _event of run.stream) {
+        /* consume the billed execution */
+      }
+      expect((await run.final).ok).toBe(true);
+    },
+  );
+  const parameters = vi.mocked(adapter.executeCompletionUnit).mock
+    .calls[0]?.[0];
+  const knowledgeRead = parameters?.tools?.find(
+    (tool) => tool.function.name === "core__knowledge_read",
+  );
+  expect(knowledgeRead?.function.parameters).toMatchObject({
+    type: "object",
+    properties: { id: { type: "string" } },
+  });
+  expect(
+    parameters?.tools?.some(
+      (tool) => tool.function.name === "core__knowledge_write",
+    ),
+  ).toBe(false);
+});
+
+// The shared HTTP core is real; these fakes stand only at the node's authentication and authority ports.
+describe("node-only Admin approval door", () => {
+  const authority = {
+    adminCheck: vi.fn(),
+    listNodeAi: vi.fn(async () => ({ permissions: [], more: 0 })),
+    grantRole: vi.fn(async (_input: unknown) => ({
+      principalUserId: "fixture-principal",
+      created: true,
+    })),
+    revokeRole: vi.fn(async () => ({
+      principalUserId: "fixture-principal",
+      revoked: true,
+    })),
+    denyRequest: vi.fn(),
+    previewAsk: vi.fn(),
+  };
+  let routes: typeof import("@/app/api/v1/admin/ai-access/route");
+  const caller = { id: "fixture-admin" };
+
+  beforeAll(async () => {
+    vi.doMock("@/bootstrap/container", () => ({
+      getContainer: () => ({ agentAuthority: authority }),
+    }));
+    vi.doMock("@/app/_lib/auth/session", () => ({ getSessionUser: vi.fn() }));
+    vi.doMock("@/shared/env", () => ({
+      serverEnv: () => ({ APP_BASE_URL: "https://levelup.example" }),
+    }));
+    vi.doMock("@/bootstrap/http", () => ({
+      wrapRouteHandlerWithLogging:
+        (
+          _options: unknown,
+          handler: (...args: unknown[]) => Promise<Response>,
+        ) =>
+        (request: Request) =>
+          handler({ log: { error: vi.fn() } }, request, caller),
+    }));
+    routes = await import("@/app/api/v1/admin/ai-access/route");
+  });
+
+  function request(
+    via: "session" | "bearer",
+    origin = "https://levelup.example",
+  ) {
+    return new NextRequest("https://levelup.example/api/v1/admin/ai-access", {
+      method: "POST",
+      headers: {
+        origin,
+        "content-type": "application/json",
+        ...(via === "bearer" ? { authorization: "Bearer fixture" } : {}),
+      },
+      body: JSON.stringify({
+        principalUserId: "fixture-principal",
+        scope: "work_item:transition",
+      }),
+    });
+  }
+
+  it("refuses non-admins with either credential before any grant call", async () => {
+    authority.adminCheck.mockResolvedValue("denied");
+    authority.grantRole.mockClear();
+    for (const via of ["session", "bearer"] as const)
+      expect((await routes.POST(request(via))).status).toBe(403);
+    expect(authority.grantRole).not.toHaveBeenCalled();
+  });
+
+  it("uses the same checked approver for both credentials and refuses cross-origin sessions", async () => {
+    authority.adminCheck.mockResolvedValue("allow");
+    authority.grantRole.mockClear();
+    expect(
+      (await routes.POST(request("session", "https://elsewhere.example")))
+        .status,
+    ).toBe(403);
+    expect(authority.grantRole).not.toHaveBeenCalled();
+    for (const via of ["session", "bearer"] as const) {
+      const response = await routes.POST(request(via));
+      expect(response.status).toBe(200);
+      expect(response.headers.get("cache-control")).toBe("no-store");
+    }
+    expect(authority.grantRole).toHaveBeenCalledTimes(2);
+    expect(authority.grantRole.mock.calls[0]?.[0]).toMatchObject({
+      me: { userId: caller.id },
+      principalUserId: "fixture-principal",
+      scope: "work_item:transition",
+    });
+  });
+
+  it("reports unavailable authority as 503 without attempting an approval", async () => {
+    authority.adminCheck.mockResolvedValue("unavailable");
+    authority.grantRole.mockClear();
+    expect((await routes.POST(request("session"))).status).toBe(503);
+    expect(authority.grantRole).not.toHaveBeenCalled();
+  });
+});
+
+it("pins node event names to the actual published provider and host", async () => {
+  const { INPROC_EVENTS } = await import(
+    "@cogni/shared-langgraph-graphs/inproc"
+  );
+  const { AGENT_HOST_EVENTS } = await import("@cogni/agent-grants/host");
+  const { EVENT_NAMES } = await import("@/shared/observability");
+  for (const [key, value] of Object.entries(INPROC_EVENTS))
+    expect(EVENT_NAMES[key as keyof typeof EVENT_NAMES]).toBe(value);
+  for (const value of Object.values(AGENT_HOST_EVENTS))
+    expect(Object.values(EVENT_NAMES)).toContain(value);
 });

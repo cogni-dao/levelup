@@ -12,29 +12,17 @@
  * @public
  */
 
-import type { EdoCapability as EdoWriteCapability, EdoToolCapability, KnowledgeCapability } from "@cogni/knowledge-store/contracts";
+import {
+	type AgentAuthoritySql,
+	type AgentToolAuthority,
+	createAgentToolAuthority,
+} from "@cogni/agent-grants/host";
 import type { ToolSourcePort } from "@cogni/ai-core";
 import type {
 	MetricsCapability,
 	RepoCapability,
 	WebSearchCapability,
 } from "@cogni/ai-tools";
-import { LEVELUP_LOCAL_TOOL_BUNDLE, LEVELUP_SHARED_TOOL_BUNDLE } from "@/bootstrap/ai/evaluation-baseline";
-import {
-	type GoalsProgress,
-	KpiBindingsSchema,
-	type MetricService,
-} from "@cogni-dao/metrics";
-import {
-	CitePairRecorder,
-	KnowledgeReadCounter as PostgresKnowledgeReadCounter,
-	type UsageLogEvent,
-} from "@cogni-dao/metrics/usage";
-import {
-	createGoalMetrics,
-	createGoalMetricTools,
-	createGoalProgressReader,
-} from "@/bootstrap/capabilities/goal-metrics";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import {
 	createDefaultRegistries,
@@ -54,6 +42,7 @@ import { createTigerBeetleAdapter } from "@cogni/financial-ledger/adapters";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
 import {
+	bindEdoToolCapability,
 	type ContributionService,
 	createContributionService,
 	createEdoCapability,
@@ -61,7 +50,6 @@ import {
 	defaultCanMergeKnowledge,
 	type KnowledgeStorePort,
 	type NodeAdminAuthority,
-	bindEdoToolCapability,
 	shapeGate,
 } from "@cogni/knowledge-store";
 import {
@@ -69,12 +57,17 @@ import {
 	createDoltgresEntryResolver,
 	createDoltgresInboxStates,
 	createDoltgresPusher,
+	DoltBranchSessionRunner,
 	DoltgresEdoResolverAdapter,
 	DoltgresKnowledgeContributionAdapter,
-	DoltBranchSessionRunner,
 	DoltgresKnowledgeStoreAdapter,
 	wrapPushSafe,
 } from "@cogni/knowledge-store/adapters/doltgres";
+import type {
+	EdoToolCapability,
+	EdoCapability as EdoWriteCapability,
+	KnowledgeCapability,
+} from "@cogni/knowledge-store/contracts";
 import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
 import {
 	COGNI_SYSTEM_PRINCIPAL_USER_ID,
@@ -85,20 +78,35 @@ import {
 	type NodeStreamPort,
 	RedisNodeStreamAdapter,
 } from "@cogni/node-streams";
+import { LANGGRAPH_CATALOG } from "@cogni/node-template-graphs";
 import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { ScheduleRunReader } from "@cogni/scheduling";
 import { PostgresScheduleRunReader } from "@cogni/scheduling/adapters/postgres";
-import { createItemRefPorts, createWorkItemWriters, type WorkItemArtifactDeps, type WorkItemQueryPort, type WriteAttribution } from "@cogni/work-items";
-import { createLevelUpWorkItemStore } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
+import {
+	createItemRefPorts,
+	createWorkItemWriters,
+	type WorkItemArtifactDeps,
+	type WorkItemQueryPort,
+	type WriteAttribution,
+} from "@cogni/work-items";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
+import {
+	type GoalsProgress,
+	KpiBindingsSchema,
+	type MetricService,
+} from "@cogni-dao/metrics";
+import {
+	CitePairRecorder,
+	KnowledgeReadCounter as PostgresKnowledgeReadCounter,
+	type UsageLogEvent,
+} from "@cogni-dao/metrics/usage";
 import {
 	Client as TemporalClient,
 	Connection as TemporalConnection,
 	type WorkflowClient,
 } from "@temporalio/client";
-import { createStreamRedisClient } from "@/bootstrap/stream-redis-client";
 import type { Logger } from "pino";
 import {
 	ALCHEMY_ADAPTER_VERSION,
@@ -114,10 +122,10 @@ import {
 	DrizzleScheduleUserAdapter,
 	DrizzleThreadPersistenceAdapter,
 	EvmRpcOnChainVerifierAdapter,
+	findExecutionScope,
 	GITHUB_ADAPTER_VERSION,
 	GitHubWebhookNormalizer,
 	getAppDb,
-	findExecutionScope,
 	LangfuseAdapter,
 	LiteLlmAdapter,
 	type MimirAdapterConfig,
@@ -130,7 +138,6 @@ import {
 	ViemEvmOnchainClient,
 	ViemTreasuryAdapter,
 } from "@/adapters/server";
-import { withReadCounting } from "@/adapters/server/knowledge-usage/counting-knowledge-capability";
 import { ServiceDrizzleAccountService } from "@/adapters/server/accounts/drizzle.adapter";
 import {
 	AggregatingModelCatalog,
@@ -142,7 +149,9 @@ import {
 	OpenAiCompatibleModelProvider,
 	PlatformModelProvider,
 } from "@/adapters/server/ai/providers";
+import { createLevelUpWorkItemStore } from "@/adapters/server/db/doltgres/shared-work-items-adapter";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
+import { withReadCounting } from "@/adapters/server/knowledge-usage/counting-knowledge-capability";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import { SplitTreasurySettlementAdapter } from "@/adapters/server/treasury/split-treasury-settlement.adapter";
 import {
@@ -151,27 +160,42 @@ import {
 	getTestOnChainVerifier,
 	getTestOperatorWallet,
 } from "@/adapters/test";
+import {
+	LEVELUP_LOCAL_TOOL_BUNDLE,
+	LEVELUP_SHARED_TOOL_BUNDLE,
+} from "@/bootstrap/ai/evaluation-baseline";
 import { createToolBindings } from "@/bootstrap/ai/tool-bindings";
 import { createBoundToolSource } from "@/bootstrap/ai/tool-source.factory";
+import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
+import {
+	createGoalMetrics,
+	createGoalMetricTools,
+	createGoalProgressReader,
+} from "@/bootstrap/capabilities/goal-metrics";
 import {
 	createMetricsCapability,
 	derivePrometheusQueryUrl,
 } from "@/bootstrap/capabilities/metrics";
-import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
 import { createRepoCapability } from "@/bootstrap/capabilities/repo";
 import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
-import {
-  createPrFactsPort,
-  resolveWorkItemsPrRepos,
-} from "@/bootstrap/capabilities/work-item-pr-facts";
 import { createMoveMetricPorts } from "@/bootstrap/capabilities/work-item-moves";
-import { createApproversNodeAdminAuthority } from "@/bootstrap/node-admin-gate";
+import {
+	createPrFactsPort,
+	resolveWorkItemsPrRepos,
+} from "@/bootstrap/capabilities/work-item-pr-facts";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
-import { startProcessHealthPublisher } from "@/bootstrap/publishers";
 import { localReadinessPreflight } from "@/bootstrap/local-readiness-preflight";
+import { createApproversNodeAdminAuthority } from "@/bootstrap/node-admin-gate";
+import { getCurrentTraceId } from "@/bootstrap/otel";
+import { startProcessHealthPublisher } from "@/bootstrap/publishers";
+import {
+	runAttribution,
+	runAttributionScope,
+} from "@/bootstrap/run-attribution";
+import { createStreamRedisClient } from "@/bootstrap/stream-redis-client";
 import type {
 	AccountService,
 	AiTelemetryPort,
@@ -215,8 +239,6 @@ import {
 	getStewardWalletConfig,
 } from "@/shared/config";
 import { serverEnv } from "@/shared/env/server-env";
-import { runAttribution, runAttributionScope } from "@/bootstrap/run-attribution";
-import { getCurrentTraceId } from "@/bootstrap/otel";
 import { EVENT_NAMES, logEvent, makeLogger } from "@/shared/observability";
 import { USDC_TOKEN_ADDRESS } from "@/shared/web3";
 import type { EvmOnchainClient } from "@/shared/web3/onchain/evm-onchain-client.interface";
@@ -225,7 +247,9 @@ export type UnhandledErrorPolicy = "rethrow" | "respond_500";
 
 class DoltgresNotConfiguredError extends Error {
 	constructor() {
-		super("Doltgres is not configured for this node. Set DOLTGRES_URL to enable the work-items API.");
+		super(
+			"Doltgres is not configured for this node. Set DOLTGRES_URL to enable the work-items API.",
+		);
 		this.name = "DoltgresNotConfiguredError";
 	}
 }
@@ -282,6 +306,7 @@ export interface Container {
 	knowledgeContributionService: ContributionService | undefined;
 	/** GOAL_CHANGE_IS_NODE_ADMIN / P0P1_IS_NODE_ADMIN: this node's one node-admin authority (repo-spec admin wallets). */
 	nodeAdmin: NodeAdminAuthority;
+	agentAuthority: AgentToolAuthority;
 	/** Direct knowledge store port — exposed for the cookie-only browse endpoint. Undefined when DOLTGRES_URL is unset. */
 	knowledgeStorePort: KnowledgeStorePort | undefined;
 	/** EDO hypothesis-loop capability for the langgraph tool bindings AND the bearer-auth REST routes under /api/v1/edo. Always present (stubs throw when DOLTGRES_URL is unset). */
@@ -374,7 +399,7 @@ export function getContainer(): Container {
 		// Dynamic import avoids a static container/job cycle.
 		if (_container.goalMetrics)
 			void import("@/bootstrap/jobs/metrics-refresh.job").then((job) =>
-				job.startMetricsSyncOnBoot()
+				job.startMetricsSyncOnBoot(),
 			);
 	}
 	return _container;
@@ -778,6 +803,17 @@ function createContainer(): Container {
 	let knowledgeContributionService: ContributionService | undefined;
 	let goalMetrics: MetricService | undefined;
 	const nodeAdmin = createApproversNodeAdminAuthority();
+	const agentAuthority = createAgentToolAuthority({
+		sql: serviceDb.$client as unknown as AgentAuthoritySql,
+		nodeAdmin,
+		log,
+		tools: LEVELUP_SHARED_TOOL_BUNDLE.map(({ contract }) => ({
+			id: contract.name,
+			requires: contract.requires,
+		})),
+		graphs: Object.values(LANGGRAPH_CATALOG),
+		systemUserIds: [COGNI_SYSTEM_PRINCIPAL_USER_ID],
+	});
 	let knowledgeStorePort: KnowledgeStorePort | undefined;
 	let doltgresWorkItems: WorkItemsDoltgresPort;
 	let workItemArtifacts: WorkItemArtifactDeps | undefined;
@@ -818,20 +854,27 @@ function createContainer(): Container {
 		const workItemsClient = createWorkItemsClient();
 		// Node stores start their allocator at 1; operator alone reserves the
 		// imported legacy range below 5000.
-		doltgresWorkItems = createLevelUpWorkItemStore(workItemsClient, serviceDb.$client, log, {
-			recreateClient: createWorkItemsClient,
-			// task.0086: pins a patch's cites to commits with lock-free reads on the
-			// knowledge pool, never on the writer connection that holds the lock.
-			entryResolver: createDoltgresEntryResolver(doltClient),
-			// story.0033: a `moves` entry pins the metric's latest good observation as its baseline.
-			metricBaseline: moveMetrics.baselines,
-			// task.0122: the status gates read a PR's head and merge state (before the writer lock) over unauthenticated
-			// GitHub REST, and an inbox's head and merge state locally on the knowledge pool.
-			prFacts: createPrFactsPort(),
-			inboxes: createDoltgresInboxStates(doltClient),
-			...(prRepos.repos.length ? { prRepos: prRepos.repos } : {}),
-			...(env.APP_BASE_URL ? { hubOrigin: new URL(env.APP_BASE_URL).origin } : {}),
-		});
+		doltgresWorkItems = createLevelUpWorkItemStore(
+			workItemsClient,
+			serviceDb.$client,
+			log,
+			{
+				recreateClient: createWorkItemsClient,
+				// task.0086: pins a patch's cites to commits with lock-free reads on the
+				// knowledge pool, never on the writer connection that holds the lock.
+				entryResolver: createDoltgresEntryResolver(doltClient),
+				// story.0033: a `moves` entry pins the metric's latest good observation as its baseline.
+				metricBaseline: moveMetrics.baselines,
+				// task.0122: the status gates read a PR's head and merge state (before the writer lock) over unauthenticated
+				// GitHub REST, and an inbox's head and merge state locally on the knowledge pool.
+				prFacts: createPrFactsPort(),
+				inboxes: createDoltgresInboxStates(doltClient),
+				...(prRepos.repos.length ? { prRepos: prRepos.repos } : {}),
+				...(env.APP_BASE_URL
+					? { hubOrigin: new URL(env.APP_BASE_URL).origin }
+					: {}),
+			},
+		);
 		// story.0061: a successful patch also records the (atom, item) pairs it cites; the route and the agent tool share
 		// this patch, and the record never fails or delays it. The adapter is a class, so the decorator inherits from it
 		// rather than spreading it.
@@ -863,16 +906,23 @@ function createContainer(): Container {
 					ownOrigin: env.APP_BASE_URL,
 				}
 			: undefined;
-		const createKnowledgeBranchClient = () => buildDoltgresClient({
-			connectionString: env.DOLTGRES_URL as string,
-			applicationName: `cogni_knowledge_branch_${env.SERVICE_NAME ?? "app"}`,
-			max: 1,
-		});
-		const knowledgeWriter = new DoltBranchSessionRunner(createKnowledgeBranchClient(), {
-			writerProtocol: "database", logger: log, recreateClient: createKnowledgeBranchClient,
-		});
+		const createKnowledgeBranchClient = () =>
+			buildDoltgresClient({
+				connectionString: env.DOLTGRES_URL as string,
+				applicationName: `cogni_knowledge_branch_${env.SERVICE_NAME ?? "app"}`,
+				max: 1,
+			});
+		const knowledgeWriter = new DoltBranchSessionRunner(
+			createKnowledgeBranchClient(),
+			{
+				writerProtocol: "database",
+				logger: log,
+				recreateClient: createKnowledgeBranchClient,
+			},
+		);
 		const knowledgePort = new DoltgresKnowledgeStoreAdapter({
-			sql: doltClient, writerSession: knowledgeWriter,
+			sql: doltClient,
+			writerSession: knowledgeWriter,
 		});
 		knowledgeStorePort = knowledgePort;
 		goalMetrics = createGoalMetrics({
@@ -1021,11 +1071,17 @@ function createContainer(): Container {
 		backlogReader: doltgresWorkItems,
 		backlogWriter: workItemWriters.backlogWriter,
 		artifactWriter: workItemWriters.artifacts,
-		refs: createItemRefPorts({ artifacts: doltgresWorkItems.artifacts, history: doltgresWorkItems }),
+		refs: createItemRefPorts({
+			artifacts: doltgresWorkItems.artifacts,
+			history: doltgresWorkItems,
+		}),
 	});
 
 	// ACTING_PRINCIPAL_FOR_WRITES (task.0133): a tool never builds an attribution; the host binds the run's at each call.
-	const edoToolCapability: EdoToolCapability = bindEdoToolCapability(edoCapability, runAttribution);
+	const edoToolCapability: EdoToolCapability = bindEdoToolCapability(
+		edoCapability,
+		runAttribution,
+	);
 
 	// ToolSource with real implementations (per CAPABILITY_INJECTION)
 	const toolBindings = createToolBindings({
@@ -1052,7 +1108,7 @@ function createContainer(): Container {
 	const toolSource = createBoundToolSource(
 		LEVELUP_LOCAL_TOOL_BUNDLE,
 		{ ...toolBindings, ...metricTools.bindings },
-		LEVELUP_SHARED_TOOL_BUNDLE
+		LEVELUP_SHARED_TOOL_BUNDLE,
 	);
 
 	// Config: rethrow in dev/test for diagnosis, respond_500 in production for safety
@@ -1203,6 +1259,7 @@ function createContainer(): Container {
 		toolSource,
 		knowledgeContributionService,
 		nodeAdmin,
+		agentAuthority,
 		knowledgeStorePort,
 		knowledgeReadCounter,
 		edoCapability,

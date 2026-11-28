@@ -35,6 +35,12 @@ const PRIMARY_ACTION = {
 
 const GOVERNANCE_VIEWS = [
 	{
+		href: "/admin/ai-access",
+		title: "AI access",
+		description: "Manage the permissions this node’s AI may use.",
+		icon: ShieldCheck,
+	},
+	{
 		href: "/gov/epoch",
 		title: "Current Epoch",
 		description: "Contributions accruing in the open epoch.",

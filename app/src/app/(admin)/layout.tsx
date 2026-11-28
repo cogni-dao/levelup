@@ -13,9 +13,8 @@
 
 import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
-
+import { getContainer } from "@/bootstrap/container";
 import { getServerSessionUser } from "@/lib/auth/server";
-import { isLedgerApprover } from "@/shared/config";
 import { makeLogger } from "@/shared/observability";
 
 import { AdminShell } from "./AdminShell";
@@ -28,9 +27,11 @@ export default async function AdminLayout({
   children: ReactNode;
 }): Promise<ReactNode> {
   const user = await getServerSessionUser();
-  const wallet = user?.walletAddress ?? null;
+  const decision = user
+    ? await getContainer().agentAuthority.adminCheck(user.id)
+    : "denied";
 
-  if (!isLedgerApprover(wallet)) {
+  if (decision !== "allow") {
     log.warn({ userId: user?.id ?? null, allowed: false }, "admin gate denied");
     redirect("/dashboard");
   }

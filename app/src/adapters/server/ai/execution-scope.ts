@@ -31,8 +31,8 @@ export interface ExecutionScope {
   /** Actor who initiated this run. Used by tools that need user-scoped operations (e.g., schedule CRUD). */
   readonly actorUserId?: string;
   /** Actual catalog principal, bound by the authorized tool guard, never the launcher caller. */
-  readonly principalId?: string;
-  readonly subjectUserId?: string;
+  readonly principalId?: string | undefined;
+  readonly subjectUserId?: string | undefined;
   /** The run this scope serves, set by the launcher (`runGraphWithScope`); every run write records it as the run (task.0133). */
   readonly runId?: string;
   /** The run record's kind (`graph_runs.run_kind`), host-set when the record names one. Absent when the record is missing or unreadable: the write then carries no `Run:` line. */
@@ -54,7 +54,7 @@ export function getExecutionScope(): ExecutionScope {
   const scope = executionScopeStorage.getStore();
   if (!scope) {
     throw new Error(
-      "getExecutionScope() called outside runInScope — billing context not available"
+      "getExecutionScope() called outside runInScope — billing context not available",
     );
   }
   return scope;

@@ -16,6 +16,16 @@ import { logEvent as logSharedEvent } from "./server";
 // App-local event registry: the shared registry plus node-local events.
 export const EVENT_NAMES = {
   ...NODE_SHARED_EVENT_NAMES,
+  // Published provider/host names, repeated here without importing server runtime into browser barrels.
+  AGENT_TOOL_AUTHZ: "agent_tool.authz",
+  AGENT_RUN_DENIED: "agent_run.denied",
+  AGENT_RUN_START_DENIED: "agent_run.start_denied",
+  AGENT_CODING_SHELL_WITHHELD: "agent_coding.shell_withheld",
+  AGENT_ROLE_GRANTED: "agent_role.granted",
+  AGENT_ROLE_REVOKED: "agent_role.revoked",
+  AGENT_ROLE_REQUESTED: "agent_role.requested",
+  AGENT_ROLE_DENIED: "agent_role.denied",
+  AGENT_ROLES_UNAVAILABLE: "agent.roles.unavailable",
   DB_POOL_CONFIGURED: "adapter.db_pool.configured",
   // Auth perimeter (proxy): request rejected before reaching any route handler,
   // so the request-scoped logger never sees it — emitted directly from the proxy.
@@ -34,13 +44,13 @@ export function logEvent(
   logger: Parameters<typeof logSharedEvent>[0],
   eventName: EventName,
   fields: Parameters<typeof logSharedEvent>[2],
-  message?: string
+  message?: string,
 ): void {
   logSharedEvent(
     logger,
     eventName as Parameters<typeof logSharedEvent>[1],
     fields,
-    message
+    message,
   );
 }
 
