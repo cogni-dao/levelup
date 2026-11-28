@@ -169,7 +169,7 @@ function makeRequest(body: unknown): NextRequest {
 		"http://localhost:3200/api/v1/identity/bindings/import",
 		{
 			method: "POST",
-			headers: { "content-type": "application/json" },
+			headers: { "content-type": "application/json", origin: new URL(mockNodeOrigin).origin },
 			body: JSON.stringify(body),
 		},
 	);
@@ -183,6 +183,7 @@ beforeEach(() => {
 	fetchMock.mockImplementation(async () => jwksOk());
 	mockGetSessionUser.mockResolvedValue({
 		id: USER_ID,
+		via: "session",
 		walletAddress: SESSION_WALLET,
 		displayName: null,
 		avatarColor: null,
@@ -350,6 +351,7 @@ describe("POST /api/v1/identity/bindings/import", () => {
 	it("binds to the nonce-owning local account without requiring a wallet", async () => {
 		mockGetSessionUser.mockResolvedValue({
 			id: USER_ID,
+			via: "session",
 			walletAddress: null,
 			displayName: null,
 			avatarColor: null,
@@ -400,7 +402,7 @@ describe("POST /api/v1/identity/bindings/import/start", () => {
 			const res = await START_POST(
 				new NextRequest(
 					"http://localhost:3200/api/v1/identity/bindings/import/start",
-					{ method: "POST" },
+					{ method: "POST", headers: { origin: new URL(mockNodeOrigin).origin } },
 				),
 			);
 
@@ -414,7 +416,7 @@ describe("POST /api/v1/identity/bindings/import/start", () => {
 		const res = await START_POST(
 			new NextRequest(
 				"http://localhost:3200/api/v1/identity/bindings/import/start",
-				{ method: "POST" },
+				{ method: "POST", headers: { origin: new URL(mockNodeOrigin).origin } },
 			),
 		);
 		expect(res.status).toBe(200);
@@ -443,7 +445,7 @@ describe("POST /api/v1/identity/bindings/import/start", () => {
 			const res = await START_POST(
 				new NextRequest(
 					"http://localhost:3200/api/v1/identity/bindings/import/start",
-					{ method: "POST" },
+					{ method: "POST", headers: { origin: new URL(mockNodeOrigin).origin } },
 				),
 			);
 
@@ -463,7 +465,7 @@ describe("POST /api/v1/identity/bindings/import/start", () => {
 		const res = await START_POST(
 			new NextRequest(
 				"http://localhost:3200/api/v1/identity/bindings/import/start",
-				{ method: "POST" },
+				{ method: "POST", headers: { origin: new URL(mockNodeOrigin).origin } },
 			),
 		);
 		expect(res.status).toBe(503);

@@ -41,7 +41,7 @@ Deterministic test doubles for unit tests with no I/O dependencies.
   - FakeLlmService (deterministic LLM responses for unit tests)
   - MockAccountService (account/credits test doubles)
   - MockServiceAccountService, MockTreasurySettlement, MockFinancialLedger (payment port test doubles)
-  - Test identity fixtures (TEST_USER_ID_1–5, TEST_SESSION_USER_1–5, TEST_WALLET_1–5, testUser(), newTestUserId(), newTestSessionUser())
+  - Test identity fixtures (verified session credential kind; TEST_USER_ID_1–5, TEST_SESSION_USER_1–5, TEST_WALLET_1–5, testUser(), newTestUserId(), newTestSessionUser())
   - Payment builders (createPaymentAttempt, createIntentAttempt, createPendingAttempt, createCreditedAttempt, createRejectedAttempt, createFailedAttempt, createExpiredIntent, createTimedOutPending)
   - makeTestCtx (RequestContext factory for facade/service tests)
   - Tool test helpers (createTestBoundToolRuntime, createTestToolSource, createEventCollector)

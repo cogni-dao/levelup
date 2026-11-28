@@ -398,24 +398,20 @@ describe("node-only Admin approval door", () => {
     previewAsk: vi.fn(),
   };
   let routes: typeof import("@/app/api/v1/admin/ai-access/route");
-  const caller = { id: "fixture-admin" };
+  const caller = { id: "fixture-admin", via: "session" as "session" | "bearer" };
 
   beforeAll(async () => {
     vi.doMock("@/bootstrap/container", () => ({
-      getContainer: () => ({ agentAuthority: authority }),
+      getContainer: () => ({
+        agentAuthority: authority,
+        config: { unhandledErrorPolicy: "rethrow" },
+        clock: { now: () => new Date("2026-11-28T00:00:00Z") },
+        log: { child: () => ({ info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() }) },
+      }),
     }));
-    vi.doMock("@/app/_lib/auth/session", () => ({ getSessionUser: vi.fn() }));
+    vi.doMock("@/app/_lib/auth/session", () => ({ getSessionUser: async () => caller }));
     vi.doMock("@/shared/env", () => ({
       serverEnv: () => ({ APP_BASE_URL: "https://levelup.example" }),
-    }));
-    vi.doMock("@/bootstrap/http", () => ({
-      wrapRouteHandlerWithLogging:
-        (
-          _options: unknown,
-          handler: (...args: unknown[]) => Promise<Response>,
-        ) =>
-        (request: Request) =>
-          handler({ log: { error: vi.fn() } }, request, caller),
     }));
     routes = await import("@/app/api/v1/admin/ai-access/route");
   });
@@ -424,6 +420,7 @@ describe("node-only Admin approval door", () => {
     via: "session" | "bearer",
     origin = "https://levelup.example",
   ) {
+    caller.via = via;
     return new NextRequest("https://levelup.example/api/v1/admin/ai-access", {
       method: "POST",
       headers: {

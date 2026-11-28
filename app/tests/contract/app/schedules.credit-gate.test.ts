@@ -17,6 +17,10 @@ import { TEST_SESSION_USER_1 } from "@tests/_fakes/ids";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/shared/env", () => ({
+  serverEnv: () => ({ APP_BASE_URL: "https://levelup.example" }),
+}));
+
 // Mock session authentication
 vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
@@ -53,6 +57,13 @@ vi.mock("@/bootstrap/container", () => ({
     },
     accountsForUser: vi.fn(() => mockAccountService),
     scheduleManager: mockScheduleManager,
+    // Session member policy is exercised by the real authority parity suite.
+    agentAuthority: {
+      authorizeRoute: async ({ toolId, userId, via }: { toolId: string; userId: string; via: string }) =>
+        toolId === "core__schedule_manage" && userId === TEST_SESSION_USER_1.id && via === "session"
+          ? { decision: "allow" }
+          : { decision: "deny", code: "forbidden" },
+    },
   })),
 }));
 
@@ -108,6 +119,7 @@ describe("POST /api/v1/schedules - Credit Gate Removed", () => {
       }) => {
         const response = await fetch({
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(VALID_SCHEDULE_BODY),
         });
 
@@ -130,6 +142,7 @@ describe("POST /api/v1/schedules - Credit Gate Removed", () => {
       }) => {
         const response = await fetch({
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify({
             ...VALID_SCHEDULE_BODY,
             input: { messages: [] }, // no model field

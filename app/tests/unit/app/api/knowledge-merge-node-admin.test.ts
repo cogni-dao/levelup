@@ -30,6 +30,7 @@ vi.mock("@/bootstrap/container", () => ({
 import { handleMerge } from "@/app/api/v1/knowledge/contributions/_handlers";
 
 const session = {
+  via: "session",
   id: "user-1",
   walletAddress: "0x070075F1389Ae1182aBac722B36CA12285d0c949",
   displayName: null,

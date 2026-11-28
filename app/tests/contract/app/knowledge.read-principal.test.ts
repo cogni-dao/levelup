@@ -44,6 +44,14 @@ vi.mock("@/bootstrap/container", () => ({
     clock: { now: vi.fn(() => new Date("2026-01-01T00:00:00Z")) },
     config: { unhandledErrorPolicy: "rethrow" },
     knowledgeStorePort: mockStore,
+    // This contract covers knowledge payloads for an authorized bearer; real grant
+    // deny/allow/revoke behavior is retained in levelup-authority.test.ts.
+    agentAuthority: {
+      authorizeRoute: async ({ toolId, userId, via }: { toolId: string; userId: string; via: string }) =>
+        toolId === "knowledge.read" && userId === TEST_SESSION_USER_1.id && via === "bearer"
+          ? { decision: "allow" }
+          : { decision: "deny", code: "forbidden" },
+    },
   })),
 }));
 
@@ -52,7 +60,7 @@ vi.mock("@/bootstrap/container", () => ({
 // token. We send a Bearer header on every request so the old guard — which
 // keyed off that header — would have returned 403.
 vi.mock("@/app/_lib/auth/session", () => ({
-  getSessionUser: vi.fn().mockResolvedValue(TEST_SESSION_USER_1),
+  getSessionUser: vi.fn().mockResolvedValue({ ...TEST_SESSION_USER_1, via: "bearer" }),
 }));
 
 import * as entryHandler from "@/app/api/v1/knowledge/[id]/route";
