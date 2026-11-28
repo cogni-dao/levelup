@@ -521,7 +521,7 @@ describe("LevelUp actual HTTP doors", () => {
     expect(effect).not.toHaveBeenCalled();
   });
 
-  it("mounts the ask/list/me published cores with verified kind; 0.11.0 session refusal remains a release dependency", async () => {
+  it("mounts the ask/list/me published cores for verified bearer and session callers", async () => {
     const authority = h.container.agentAuthority;
     const ask = vi
       .spyOn(authority, "requestAccess")
@@ -547,13 +547,17 @@ describe("LevelUp actual HTTP doors", () => {
     noStore(await asks.GET(request("GET")), 200);
     noStore(await me.GET(request("GET")), 200);
     h.session = user;
-    noStore(await asks.GET(request("GET", undefined, "session")), 404);
+    noStore(await asks.GET(request("GET", undefined, "session")), 200);
     noStore(
       await asks.POST(
-        request("POST", { scope: "work_item:transition" }, "session", h.origin),
+        request("POST", { scope: "work_item:transition", principalUserId: "forged" }, "session", h.origin),
       ),
-      404,
+      201,
     );
+    expect(ask).toHaveBeenLastCalledWith({
+      principalUserId: user.id,
+      scope: "work_item:transition",
+    });
     h.session = null;
     ask.mockRejectedValue(new Error("offline"));
     noStore(
