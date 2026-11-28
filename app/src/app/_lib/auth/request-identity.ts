@@ -5,7 +5,8 @@
  * Module: `@app/_lib/auth/request-identity`
  * Purpose: Unified request identity resolver — returns a SessionUser for
  *   either a valid HMAC-signed machine bearer token (`cogni_ag_sk_v1_...`)
- *   or a browser session cookie. One entry point for both auth surfaces.
+ *   or a browser session cookie, with the verified credential kind (`via`).
+ *   One entry point for both auth surfaces; Origin admission belongs to the HTTP wrapper.
  * Scope: Bearer parser + HMAC signer/verifier (issueAgentApiKey exported to
  *   the register route only), and resolveRequestIdentity which
  *   wrapRouteHandlerWithLogging consumes via `auth.getSessionUser`. Does NOT
@@ -26,9 +27,9 @@
  */
 
 import { createHmac, timingSafeEqual } from "node:crypto";
-import type { SessionUser } from "@cogni/node-shared";
 import { headers } from "next/headers";
 import { getServerSessionUser } from "@/lib/auth/server";
+import type { AuthenticatedIdentity } from "@/shared/authenticated-identity";
 import { serverEnv } from "@/shared/env/server";
 
 type AgentTokenPayload = {
@@ -78,7 +79,7 @@ function parseAgentToken(token: string): AgentTokenPayload | null {
 
   try {
     const parsed = JSON.parse(
-      Buffer.from(payloadB64, "base64url").toString("utf8")
+      Buffer.from(payloadB64, "base64url").toString("utf8"),
     ) as AgentTokenPayload;
     if (!parsed.sub) return null;
     if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
@@ -102,36 +103,25 @@ export function issueAgentApiKey(input: {
   return `${TOKEN_PREFIX}${payloadB64}.${signPayload(payloadB64)}`;
 }
 
-function isSameOrigin(origin: string | null, host: string | null): boolean {
-  if (!origin || !host) return true;
-  try {
-    return new URL(origin).host === host;
-  } catch {
-    return false;
-  }
-}
-
-export async function resolveRequestIdentity(): Promise<SessionUser | null> {
+export async function resolveRequestIdentity(): Promise<AuthenticatedIdentity | null> {
   let h: Awaited<ReturnType<typeof headers>>;
   try {
     h = await headers();
   } catch {
-    return getServerSessionUser();
+    return null;
   }
-  const bearer = extractBearerToken(h.get("authorization"));
-  if (bearer) {
-    const payload = parseAgentToken(bearer);
+  const authorization = h.get("authorization");
+  if (authorization && /^Bearer(?:\s|$)/i.test(authorization)) {
+    const bearer = extractBearerToken(authorization);
+    const payload = bearer ? parseAgentToken(bearer) : null;
     if (!payload) return null;
     return {
       id: payload.sub,
+      via: "bearer",
       walletAddress: null,
       displayName: payload.displayName,
       avatarColor: null,
     };
-  }
-
-  if (!isSameOrigin(h.get("origin"), h.get("host"))) {
-    return null;
   }
 
   return getServerSessionUser();

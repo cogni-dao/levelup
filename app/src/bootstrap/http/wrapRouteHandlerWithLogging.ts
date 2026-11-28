@@ -16,10 +16,14 @@
  * @public
  */
 
+import { bearerWriteRefusal, SAFE_METHODS } from "@cogni/agent-grants";
 import type { SessionUser } from "@cogni/node-shared";
 import { type NextRequest, NextResponse } from "next/server";
+import { routeAuthorityId } from "@/bootstrap/agent-permissions";
 import type { Container } from "@/bootstrap/container";
 import { withRootSpan } from "@/bootstrap/otel";
+import { requestCredentialKind } from "@/shared/authenticated-identity";
+import { serverEnv } from "@/shared/env";
 import {
   createRequestContext,
   httpRequestDurationMs,
@@ -36,18 +40,20 @@ type AuthRequiredHandler<TContext = unknown> = (
   ctx: RequestContext,
   request: NextRequest,
   sessionUser: SessionUser,
-  context?: TContext
+  context?: TContext,
 ) => Promise<NextResponse>;
 
 type AuthOptionalHandler<TContext = unknown> = (
   ctx: RequestContext,
   request: NextRequest,
   sessionUser: SessionUser | null,
-  context?: TContext
+  context?: TContext,
 ) => Promise<NextResponse>;
 
 type AuthRequiredOptions = {
   routeId: string;
+  /** Caller-owned operation with an existing product authorization check. */
+  bearerWrite?: string;
   auth: {
     mode: "required";
     getSessionUser: () => Promise<SessionUser | null>;
@@ -56,6 +62,8 @@ type AuthRequiredOptions = {
 
 type AuthOptionalOptions = {
   routeId: string;
+  /** Caller-owned operation with an existing product authorization check. */
+  bearerWrite?: string;
   auth: {
     mode: "optional";
     getSessionUser: () => Promise<SessionUser | null>;
@@ -64,6 +72,8 @@ type AuthOptionalOptions = {
 
 type AuthNoneOptions = {
   routeId: string;
+  /** Caller-owned operation with an existing product authorization check. */
+  bearerWrite?: string;
   auth?: { mode: "none" };
 };
 
@@ -106,21 +116,21 @@ type WrapOptions = AuthRequiredOptions | AuthOptionalOptions | AuthNoneOptions;
 // Overload: mode "required" → handler receives SessionUser (non-null)
 export function wrapRouteHandlerWithLogging<TContext = unknown>(
   options: AuthRequiredOptions,
-  handler: AuthRequiredHandler<TContext>
+  handler: AuthRequiredHandler<TContext>,
 ): (request: NextRequest, context?: TContext) => Promise<NextResponse>;
 // Overload: mode "optional" or "none" → handler receives SessionUser | null
 export function wrapRouteHandlerWithLogging<TContext = unknown>(
   options: AuthOptionalOptions | AuthNoneOptions,
-  handler: AuthOptionalHandler<TContext>
+  handler: AuthOptionalHandler<TContext>,
 ): (request: NextRequest, context?: TContext) => Promise<NextResponse>;
 // Implementation
 export function wrapRouteHandlerWithLogging<TContext = unknown>(
   options: WrapOptions,
-  handler: AuthRequiredHandler<TContext> | AuthOptionalHandler<TContext>
+  handler: AuthRequiredHandler<TContext> | AuthOptionalHandler<TContext>,
 ): (request: NextRequest, context?: TContext) => Promise<NextResponse> {
   return async (
     request: NextRequest,
-    context?: TContext
+    context?: TContext,
   ): Promise<NextResponse> => {
     // Dynamic import: breaks Turbopack's per-route static module graph tracing
     // of the entire DI composition root (spike.0203 — was causing 6GB RSS in dev).
@@ -141,7 +151,7 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
           err:
             bootError instanceof Error ? bootError.message : String(bootError),
         },
-        "container initialization failed — returning 503"
+        "container initialization failed — returning 503",
       );
       return new NextResponse(
         JSON.stringify({
@@ -154,16 +164,30 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
         }),
         {
           status: 503,
-          headers: { "content-type": "application/json" },
-        }
+          headers: {
+            "content-type": "application/json",
+            "cache-control": "no-store",
+          },
+        },
       );
     }
 
     // Fetch session based on auth mode
-    const sessionUser =
-      options.auth && options.auth.mode !== "none"
-        ? await options.auth.getSessionUser()
-        : null;
+    let sessionUser: SessionUser | null;
+    try {
+      sessionUser =
+        options.auth && options.auth.mode !== "none"
+          ? await options.auth.getSessionUser()
+          : null;
+    } catch {
+      return NextResponse.json(
+        { error: "authz_unavailable" },
+        {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
 
     // Wrap entire request in OTel root span for distributed tracing
     // Per AI_SETUP_SPEC.md: root span bound to context via context.with()
@@ -178,7 +202,7 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
             routeId: options.routeId,
             traceId,
             session: sessionUser ?? undefined,
-          }
+          },
         );
 
         // Per AI_SETUP_SPEC.md: request_id must be on root span for trace-log correlation
@@ -197,9 +221,69 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
             responseStatus = 401;
             response = NextResponse.json(
               { error: "Session required" },
-              { status: responseStatus }
+              {
+                status: responseStatus,
+                headers: { "cache-control": "no-store" },
+              },
             );
             return response;
+          }
+
+          const refuse = (error: string, status: number, reason?: string) => {
+            responseStatus = status;
+            return NextResponse.json(
+              { error, ...(reason ? { reason } : {}) },
+              {
+                status,
+                headers: { "cache-control": "no-store" },
+              },
+            );
+          };
+          if (sessionUser) {
+            let via: "bearer" | "session";
+            try {
+              via = requestCredentialKind(sessionUser);
+            } catch {
+              return refuse("authz_unavailable", 503);
+            }
+            const mutation = !SAFE_METHODS.has(request.method.toUpperCase());
+            if (via === "session" && mutation) {
+              let origin: string;
+              try {
+                origin = new URL(serverEnv().APP_BASE_URL ?? "").origin;
+              } catch {
+                return refuse("authz_unavailable", 503);
+              }
+              if (request.headers.get("origin") !== origin)
+                return refuse("forbidden", 403);
+            }
+            const toolId = routeAuthorityId(options.routeId);
+            const undeclared = bearerWriteRefusal({
+              method: request.method,
+              via,
+              doorRuns: !!toolId,
+              routeId: options.routeId,
+              bearerWrite: options.bearerWrite,
+            });
+            if (undeclared) return refuse(undeclared.code, 403);
+            if (toolId) {
+              try {
+                const decision = await container.agentAuthority.authorizeRoute({
+                  toolId,
+                  routeId: options.routeId,
+                  userId: sessionUser.id,
+                  via,
+                });
+                if (decision.decision !== "allow")
+                  return refuse(
+                    decision.code,
+                    decision.code === "authz_unavailable" ? 503 : 403,
+                    decision.reason,
+                  );
+              } catch {
+                return refuse("authz_unavailable", 503);
+              }
+            }
           }
 
           // Safe cast: for mode "required", the guard above returns 401 if null.
@@ -208,9 +292,11 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
             ctx,
             request,
             sessionUser,
-            context
+            context,
           );
           responseStatus = response.status;
+          if (response.status === 503)
+            response.headers.set("cache-control", "no-store");
           return response;
         } catch (error) {
           // Wrapper only catches unhandled errors - route should handle domain errors
@@ -224,7 +310,7 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
           // respond_500: convert to 500 for production safety
           response = NextResponse.json(
             { error: "Internal server error" },
-            { status: responseStatus }
+            { status: responseStatus },
           );
           return response;
         } finally {
@@ -242,11 +328,11 @@ export function wrapRouteHandlerWithLogging<TContext = unknown>(
             });
             httpRequestDurationMs.observe(
               { route: options.routeId, method: request.method },
-              durationMs
+              durationMs,
             );
           }
         }
-      }
+      },
     );
   };
 }

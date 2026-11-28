@@ -19,6 +19,11 @@
  */
 
 import {
+	agentAccessRequestCreateOperation,
+	agentAccessRequestListOperation,
+	agentMeOperation,
+} from "@cogni/agent-grants/http";
+import {
 	knowledgeHistoryOperation,
 	workItemsArtifactGetOperation,
 	workItemsArtifactsCreateOperation,
@@ -35,6 +40,7 @@ import {
 } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { LEVELUP_PERMISSIONS } from "@/bootstrap/agent-permissions";
 import {
 	getNodeBrandColor,
 	getNodeBrandIcon,
@@ -87,7 +93,10 @@ export async function GET(request: Request) {
 		},
 		registrationUrl: `${origin}/api/v1/agent/register`,
 		auth: { type: "bearer", keyPrefix: "cogni_ag_sk_v1_" },
+		permissions: LEVELUP_PERMISSIONS.permissions,
 		endpoints: {
+			agentMe: `${origin}/api/v1/agent/me`,
+			accessRequests: `${origin}/api/v1/agent/access-requests`,
 			openapi: `${origin}/openapi.json`,
 			completions: `${origin}/api/v1/chat/completions`,
 			graphs: `${origin}/api/v1/ai/agents`,
@@ -102,6 +111,25 @@ export async function GET(request: Request) {
 			workItemCoordination: `${origin}/api/v1/work/items/{id}/coordination`,
 		},
 		actions: {
+			agentMe: {
+				method: "GET",
+				endpoint: `${origin}/api/v1/agent/me`,
+				auth: { type: "bearer" },
+				outputSchema: z.toJSONSchema(agentMeOperation.output),
+			},
+			requestAccess: {
+				method: "POST",
+				endpoint: `${origin}/api/v1/agent/access-requests`,
+				auth: { type: "bearer" },
+				inputSchema: z.toJSONSchema(agentAccessRequestCreateOperation.input),
+				outputSchema: z.toJSONSchema(agentAccessRequestCreateOperation.output),
+			},
+			listAccessRequests: {
+				method: "GET",
+				endpoint: `${origin}/api/v1/agent/access-requests`,
+				auth: { type: "bearer" },
+				outputSchema: z.toJSONSchema(agentAccessRequestListOperation.output),
+			},
 			listWorkItems: {
 				method: "GET",
 				endpoint: `${origin}/api/v1/work/items`,

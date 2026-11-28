@@ -51,7 +51,7 @@ pnpm test tests/unit/
 
 ## Standards
 
-- `getServerSessionUser()` returns null unless both id AND walletAddress are present
+- `getServerSessionUser()` returns null unless id is present; OAuth wallets may be null. Returns verified via=session.
 - `getOrCreateBillingAccountForUser()` accepts injected AccountService (no direct adapter import)
 
 ## Dependencies

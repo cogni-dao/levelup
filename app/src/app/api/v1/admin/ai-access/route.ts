@@ -11,7 +11,6 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { serverEnv } from "@/shared/env";
 import { EVENT_NAMES } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +20,8 @@ function handler(call: AdminAiAccessCall) {
   return wrapRouteHandlerWithLogging(
     {
       routeId: `admin.ai-access.${call}`,
+      bearerWrite:
+        "Published admin calls enforce the canonical bound-wallet DAO check",
       auth: { mode: "required", getSessionUser },
     },
     async (ctx, request, user) => {
@@ -30,19 +31,6 @@ function handler(call: AdminAiAccessCall) {
           headers: { "cache-control": "no-store" },
         });
       if (!user) return respond({ error: "unauthorized" }, 401);
-      const bearer = request.headers
-        .get("authorization")
-        ?.toLowerCase()
-        .startsWith("bearer ");
-      const publicOrigin = serverEnv().APP_BASE_URL;
-      if (
-        call !== "list" &&
-        !bearer &&
-        (!publicOrigin ||
-          request.headers.get("origin") !== new URL(publicOrigin).origin)
-      ) {
-        return respond({ error: "forbidden" }, 403);
-      }
       const authority = getContainer().agentAuthority;
       let admin: Awaited<ReturnType<typeof authority.adminCheck>>;
       try {

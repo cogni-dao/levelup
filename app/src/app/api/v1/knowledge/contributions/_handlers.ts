@@ -36,7 +36,6 @@ import {
   KnowledgeBusyError,
   KnowledgeGateError,
   NodeAdminRequiredError,
-  type PrincipalAuthSource,
   sessionUserToPrincipal,
 } from "@cogni/knowledge-store";
 import {
@@ -46,6 +45,7 @@ import {
   ContributionsCreateRequestSchema,
   ContributionsListQuerySchema,
 } from "@cogni/node-contracts";
+import { requestCredentialKind } from "@/shared/authenticated-identity";
 import type { SessionUser } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 
@@ -65,10 +65,7 @@ function service() {
  * inspection is the only place we re-derive the auth source for the
  * KNOWLEDGE_LOOP_CLOSED_VIA_SIGNED_IN_USER gate.
  */
-function authSource(request: Request): PrincipalAuthSource {
-  const authz = request.headers.get("authorization") ?? "";
-  return authz.toLowerCase().startsWith("bearer ") ? "bearer" : "session";
-}
+
 
 function mapError(e: unknown): NextResponse {
   // Admission control refused, reserved, or lock-contended: nothing was
@@ -160,7 +157,7 @@ export async function handleCreate(
     if (entry.kpiBindings != null && !KpiBindingsSchema.safeParse(entry.kpiBindings).success) return NextResponse.json({ error: "invalid KPI bindings" }, { status: 400 });
     if (entry.entryType === "hypothesis" && Array.isArray(entry.kpiBindings) && entry.kpiBindings.length && !entry.kpiBindings.every(binding => binding.evaluationAt && binding.baselineObservationId)) return NextResponse.json({ error: "hypothesis KPI bindings require a fixed evaluation and baseline observation" }, { status: 422 });
   }
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   const createBody = {
     message: parsed.data.message,
     ...(parsed.data.edits ? { edits: parsed.data.edits } : {}),
@@ -205,7 +202,7 @@ export async function handleList(
       { status: 400 }
     );
 
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   const query = {
     state: parsed.data.state,
     limit: parsed.data.limit,
@@ -276,7 +273,7 @@ export async function handleAppendCommit(
     if (entry.kpiBindings != null && !KpiBindingsSchema.safeParse(entry.kpiBindings).success) return NextResponse.json({ error: "invalid KPI bindings" }, { status: 400 });
     if (entry.entryType === "hypothesis" && Array.isArray(entry.kpiBindings) && entry.kpiBindings.length && !entry.kpiBindings.every(binding => binding.evaluationAt && binding.baselineObservationId)) return NextResponse.json({ error: "hypothesis KPI bindings require a fixed evaluation and baseline observation" }, { status: 422 });
   }
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   try {
     const commit = await svc.appendCommit({
       principal,
@@ -375,7 +372,7 @@ export async function handleMerge(
       { status: 400 }
     );
 
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   try {
     // GOAL_CHANGE_IS_NODE_ADMIN is enforced inside ContributionService.merge
     // (raw diff ids + expected head); this passes the acting wallet.
@@ -436,7 +433,7 @@ export async function handleClose(
       { status: 400 }
     );
 
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   try {
     await svc.close({
       principal,

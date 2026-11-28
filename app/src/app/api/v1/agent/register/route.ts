@@ -17,11 +17,10 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { users } from "@cogni/db-schema";
 import { registerAgentOperation } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { issueAgentApiKey } from "@/app/_lib/auth/request-identity";
-import { getContainer, resolveServiceDb } from "@/bootstrap/container";
+import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 
 export const runtime = "nodejs";
@@ -35,34 +34,46 @@ export const POST = wrapRouteHandlerWithLogging(
     }
     const input = parsed.data;
 
-    const db = resolveServiceDb();
-    const id = randomUUID();
-
-    await db.insert(users).values({
-      id,
-      name: input.name,
-      walletAddress: null,
-    });
-
     const container = getContainer();
-    const billingAccount =
-      await container.serviceAccountService.getOrCreateBillingAccountForUser({
+    const id = randomUUID();
+    try {
+      if (await container.agentAuthority.nameTaken(input.name))
+        return NextResponse.json(
+          { error: "name_taken" },
+          { status: 409, headers: { "cache-control": "no-store" } },
+        );
+      // Published transaction creates both rows; never infer existing users' kind or seed roles.
+      await container.agentAuthority.registerAgent({
+        userId: id,
+        name: input.name,
+      });
+      const billingAccount =
+        await container.serviceAccountService.getOrCreateBillingAccountForUser({
+          userId: id,
+          displayName: input.name,
+        });
+
+      const apiKey = issueAgentApiKey({
         userId: id,
         displayName: input.name,
       });
 
-    const apiKey = issueAgentApiKey({
-      userId: id,
-      displayName: input.name,
-    });
-
-    return NextResponse.json(
-      registerAgentOperation.output.parse({
-        userId: id,
-        apiKey,
-        billingAccountId: billingAccount.id,
-      }),
-      { status: 201 }
-    );
-  }
+      return NextResponse.json(
+        registerAgentOperation.output.parse({
+          userId: id,
+          apiKey,
+          billingAccountId: billingAccount.id,
+        }),
+        { status: 201, headers: { "cache-control": "no-store" } },
+      );
+    } catch {
+      return NextResponse.json(
+        { error: "authz_unavailable" },
+        {
+          status: 503,
+          headers: { "cache-control": "no-store" },
+        },
+      );
+    }
+  },
 );

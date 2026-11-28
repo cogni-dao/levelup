@@ -119,7 +119,7 @@ export const PATCH = wrapRouteHandlerWithLogging<{
 
 /** Retired: cancel with PATCH, a reason and the current expectedRevision. */
 export const DELETE = wrapRouteHandlerWithLogging<{ params: Promise<{ id: string }> }>(
-  { routeId: "work.items.delete", auth: { mode: "required", getSessionUser } },
+  { routeId: "work.items.delete", bearerWrite: "Retired endpoint returns 410 without mutation", auth: { mode: "required", getSessionUser } },
   async () => NextResponse.json({
     error: "Work-item deletion is retired; use PATCH with set.status=cancelled, reason and expectedRevision.",
     errorCode: "work_item_delete_retired",

@@ -46,9 +46,9 @@ import {
   HypothesisMissingEvaluateAtError,
   KnowledgeBusyError,
   KnowledgeGateError,
-  type PrincipalAuthSource,
   sessionUserToPrincipal,
 } from "@cogni/knowledge-store";
+import { requestCredentialKind } from "@/shared/authenticated-identity";
 import type { SessionUser } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 
@@ -60,10 +60,7 @@ import { routeAttribution } from "@cogni/work-items";
  * become `kind: 'agent'` principals → sourceType 'agent'. Session-cookie
  * users become `kind: 'user'` principals → sourceType 'human'.
  */
-function authSource(request: Request): PrincipalAuthSource {
-  const authz = request.headers.get("authorization") ?? "";
-  return authz.toLowerCase().startsWith("bearer ") ? "bearer" : "session";
-}
+
 
 function mapError(e: unknown): NextResponse {
   // Admission control refused, reserved, or lock-contended: nothing was
@@ -158,10 +155,9 @@ interface DerivedSource {
 }
 
 function deriveSource(
-  sessionUser: SessionUser,
-  request: Request
+  sessionUser: SessionUser
 ): DerivedSource {
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   return {
     sourceType: principal.kind === "user" ? "human" : "agent",
     sourceRef: `principal:${principal.id}${principal.name ? `:${principal.name}` : ""}`,
@@ -197,7 +193,7 @@ export async function handleHypothesize(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -254,10 +250,7 @@ export async function handleHypothesize(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const entry = await edo.hypothesize({
@@ -315,7 +308,7 @@ export async function handleDecide(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -362,10 +355,7 @@ export async function handleDecide(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const entry = await edo.decide({
@@ -480,7 +470,7 @@ export async function handleRecordOutcome(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -529,10 +519,7 @@ export async function handleRecordOutcome(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const result = await edo.recordOutcome({

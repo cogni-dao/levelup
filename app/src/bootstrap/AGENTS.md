@@ -78,7 +78,7 @@ System setup installers were moved to `scripts/bootstrap/` and are out of scope 
 - `http/` - Route wrappers and rate limiting
 - `jobs/` - Job modules (advisory lock + container wiring for CLI-invoked tasks)
 
-Published agent-grants/host supplies agentAuthority on Container, bound to serviceDb and nodeAdmin. The node-only Admin approval door never seeds roles. Published langgraph-graphs/inproc owns guards, programs and source-context resolution; scoped graphs never route to dev.
+Published agent-grants/host supplies agentAuthority on Container, bound to serviceDb and nodeAdmin. The HTTP wrapper resolves offered twins from composeAgentRoutes, calls authorizeRoute with verified credential kind, denies undeclared bearer writes, and requires configured canonical Origin for session mutations. agent-permissions projects the same declarations into discovery. The node-only Admin approval door never seeds roles. Published langgraph-graphs/inproc owns guards, programs and source-context resolution; scoped graphs never route to dev.
 
 Run write attribution reads principalId separately from subjectUserId; launchers never promote requester to actor. LevelUp content keeps bridge fencing; published Postgres leases use serviceDb. Activation requires producer expiry and applied migration.
 
