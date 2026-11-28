@@ -23,7 +23,8 @@ export * from "./ai/tool-catalog";
 export * from "./analytics";
 
 // --- Auth ---
-export * from "./auth";
+export * from "./auth/session";
+export * from "./auth/scheduler-token";
 
 // --- Config (schema only — server accessor stays app-local) ---
 export * from "./config/repoSpec.schema";

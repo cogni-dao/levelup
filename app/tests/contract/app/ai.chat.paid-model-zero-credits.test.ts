@@ -66,6 +66,7 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
 
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
+    APP_BASE_URL: "https://levelup.example",
     AUTH_SECRET: "test-auth-secret-at-least-32-characters",
   }),
 }));
@@ -164,6 +165,7 @@ describe("POST /api/v1/ai/chat - Paid Model Zero Credits", () => {
       }) => {
         const response = await fetch({
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify({
             message: "Hello",
             modelRef: { providerKey: "platform", modelId: "paid-model" },

@@ -16,7 +16,7 @@
 
 import { randomBytes, randomUUID } from "node:crypto";
 import { toUserId, type UserId } from "@cogni/ids";
-import type { SessionUser } from "@cogni/node-shared";
+import type { AuthenticatedIdentity } from "@/shared/authenticated-identity";
 
 // --- Deterministic test users (stable UUIDs for reproducible tests) ---
 
@@ -43,29 +43,34 @@ export const TEST_WALLET_3 = `0x${"0".repeat(39)}3`;
 export const TEST_WALLET_4 = `0x${"0".repeat(39)}4`;
 export const TEST_WALLET_5 = `0x${"0".repeat(39)}5`;
 
-export const TEST_SESSION_USER_1: SessionUser = {
+export const TEST_SESSION_USER_1: AuthenticatedIdentity = {
+  via: "session",
   id: TEST_USER_ID_1,
   walletAddress: TEST_WALLET_1,
 };
-export const TEST_SESSION_USER_2: SessionUser = {
+export const TEST_SESSION_USER_2: AuthenticatedIdentity = {
+  via: "session",
   id: TEST_USER_ID_2,
   walletAddress: TEST_WALLET_2,
 };
-export const TEST_SESSION_USER_3: SessionUser = {
+export const TEST_SESSION_USER_3: AuthenticatedIdentity = {
+  via: "session",
   id: TEST_USER_ID_3,
   walletAddress: TEST_WALLET_3,
 };
-export const TEST_SESSION_USER_4: SessionUser = {
+export const TEST_SESSION_USER_4: AuthenticatedIdentity = {
+  via: "session",
   id: TEST_USER_ID_4,
   walletAddress: TEST_WALLET_4,
 };
-export const TEST_SESSION_USER_5: SessionUser = {
+export const TEST_SESSION_USER_5: AuthenticatedIdentity = {
+  via: "session",
   id: TEST_USER_ID_5,
   walletAddress: TEST_WALLET_5,
 };
 
 /** Lookup a deterministic test session user by index (1–5). */
-export function testUser(n: 1 | 2 | 3 | 4 | 5): SessionUser {
+export function testUser(n: 1 | 2 | 3 | 4 | 5): AuthenticatedIdentity {
   const users = [
     TEST_SESSION_USER_1,
     TEST_SESSION_USER_2,
@@ -104,9 +109,10 @@ function generateTestWallet(): string {
 
 /** Create a test SessionUser with random UserId and wallet. */
 export function newTestSessionUser(
-  overrides?: Partial<SessionUser>
-): SessionUser {
+  overrides?: Partial<Omit<AuthenticatedIdentity, "via">>
+): AuthenticatedIdentity {
   return {
+    via: "session",
     id: overrides?.id ?? newTestUserId(),
     walletAddress: overrides?.walletAddress ?? generateTestWallet(),
   };

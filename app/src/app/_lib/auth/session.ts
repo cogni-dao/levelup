@@ -3,11 +3,12 @@
 
 /**
  * Module: `@app/_lib/auth/session`
- * Purpose: Default session resolver — agent-first (Bearer token → session cookie fallback).
+ * Purpose: Default session resolver — agent-first (verified bearer token or session cookie).
  * Scope: Re-exports resolveRequestIdentity as getSessionUser so all routes using this import
  *   accept both machine bearer tokens and human session cookies without per-route changes.
  * Invariants:
- *   - Bearer checked first; same-origin session fallback for browser requests.
+ *   - Bearer claims are exclusive; verified credential kind travels with the identity.
+ *   - Session mutation Origin is checked against configured APP_BASE_URL by the HTTP wrapper.
  *   - request-identity.ts MUST NOT import from this module — it breaks the import cycle by
  *     calling @/lib/auth/server.getServerSessionUser directly. Enforced by eye for now; a
  *     depcruise rule can codify it later.

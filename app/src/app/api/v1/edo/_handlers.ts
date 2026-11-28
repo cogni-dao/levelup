@@ -35,6 +35,7 @@ import {
 import {
   CitationTargetNotFoundError,
   CitationTypeMismatchError,
+  CommitTextInvalidError,
   ContributionConflictError,
   ContributionForbiddenError,
   ContributionNotFoundError,
@@ -45,23 +46,21 @@ import {
   HypothesisMissingEvaluateAtError,
   KnowledgeBusyError,
   KnowledgeGateError,
-  type PrincipalAuthSource,
   sessionUserToPrincipal,
 } from "@cogni/knowledge-store";
+import { requestCredentialKind } from "@/shared/authenticated-identity";
 import type { SessionUser } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 
 import { getContainer } from "@/bootstrap/container";
+import { routeAttribution } from "@cogni/work-items";
 
 /**
  * Same auth-source detector used by knowledge/contributions. Bearer agents
  * become `kind: 'agent'` principals → sourceType 'agent'. Session-cookie
  * users become `kind: 'user'` principals → sourceType 'human'.
  */
-function authSource(request: Request): PrincipalAuthSource {
-  const authz = request.headers.get("authorization") ?? "";
-  return authz.toLowerCase().startsWith("bearer ") ? "bearer" : "session";
-}
+
 
 function mapError(e: unknown): NextResponse {
   // Admission control refused, reserved, or lock-contended: nothing was
@@ -73,6 +72,9 @@ function mapError(e: unknown): NextResponse {
       { status: 503, headers: { "Retry-After": "2" } }
     );
   if (e instanceof HypothesisMissingEvaluateAtError)
+    return NextResponse.json({ error: e.message }, { status: 400 });
+  // An entry id with a line break would forge a commit line: caller input (any other bad attribution is a host defect and stays a 500).
+  if (e instanceof CommitTextInvalidError)
     return NextResponse.json({ error: e.message }, { status: 400 });
   if (e instanceof CitationTargetNotFoundError)
     return NextResponse.json({ error: e.message }, { status: 404 });
@@ -153,10 +155,9 @@ interface DerivedSource {
 }
 
 function deriveSource(
-  sessionUser: SessionUser,
-  request: Request
+  sessionUser: SessionUser
 ): DerivedSource {
-  const principal = sessionUserToPrincipal(sessionUser, authSource(request));
+  const principal = sessionUserToPrincipal(sessionUser, requestCredentialKind(sessionUser));
   return {
     sourceType: principal.kind === "user" ? "human" : "agent",
     sourceRef: `principal:${principal.id}${principal.name ? `:${principal.name}` : ""}`,
@@ -192,7 +193,7 @@ export async function handleHypothesize(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -249,10 +250,7 @@ export async function handleHypothesize(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const entry = await edo.hypothesize({
@@ -276,7 +274,7 @@ export async function handleHypothesize(
       ...(parsed.data.confidencePct !== undefined
         ? { confidencePct: parsed.data.confidencePct }
         : {}),
-    });
+    }, routeAttribution(sessionUser.id));
     log.info(
       {
         route: "edo.hypothesize",
@@ -310,7 +308,7 @@ export async function handleDecide(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -357,10 +355,7 @@ export async function handleDecide(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const entry = await edo.decide({
@@ -376,7 +371,7 @@ export async function handleDecide(
       ...(parsed.data.confidencePct !== undefined
         ? { confidencePct: parsed.data.confidencePct }
         : {}),
-    });
+    }, routeAttribution(sessionUser.id));
     log.info(
       {
         route: "edo.decide",
@@ -475,7 +470,7 @@ export async function handleRecordOutcome(
       { status: 400 }
     );
 
-  const auth = authSource(request);
+  const auth = requestCredentialKind(sessionUser);
   const principal = sessionUserToPrincipal(sessionUser, auth);
   const log = getContainer().log;
 
@@ -524,10 +519,7 @@ export async function handleRecordOutcome(
     }
   }
 
-  const { sourceType, sourceRef, sourceNode } = deriveSource(
-    sessionUser,
-    request
-  );
+  const { sourceType, sourceRef, sourceNode } = deriveSource(sessionUser);
   const edo = getContainer().edoCapability;
   try {
     const result = await edo.recordOutcome({
@@ -544,7 +536,7 @@ export async function handleRecordOutcome(
       ...(parsed.data.confidencePct !== undefined
         ? { confidencePct: parsed.data.confidencePct }
         : {}),
-    });
+    }, routeAttribution(sessionUser.id));
     log.info(
       {
         route: "edo.record_outcome",

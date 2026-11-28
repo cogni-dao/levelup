@@ -5,7 +5,7 @@
 ## Metadata
 
 - **Owners:** @derekg1729
-- **Last reviewed:** 2026-05-30
+- **Last reviewed:** 2026-11-28
 - **Status:** draft
 
 ## Purpose
@@ -35,6 +35,7 @@ admin-only surfaces in one role-gated shell.
 ## Public Surface
 
 - **Exports:** none
+- **Routes:** `/admin/ai-access` mounts the published AgentAccessSection; its node-only API uses the same bound-wallet DAO check for sessions and bearers.
 - **Routes:** `/admin` (index linking to admin-only surfaces such as `/gov/review`)
 - **Files considered API:** `layout.tsx`, `admin/page.tsx`
 
@@ -43,7 +44,7 @@ admin-only surfaces in one role-gated shell.
 - **Login gate** — `proxy.ts` matcher includes `/admin/:path*`; unauthenticated
   visitors are redirected to `/`.
 - **Admin gate** — `layout.tsx` (server component) reads
-  `getServerSessionUser()` + `getLedgerApprovers()`. Non-approvers are
+  `getServerSessionUser()` + the published host’s bound-wallet `agentAuthority.adminCheck`. Non-admins are
   redirected to `/dashboard`.
 - **No UI-only gating.** Hiding nav links is a UX hint; the server gate is
   the security boundary.

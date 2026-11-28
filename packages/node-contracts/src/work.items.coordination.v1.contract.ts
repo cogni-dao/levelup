@@ -12,7 +12,11 @@
 
 import { z } from "zod";
 
-import { WorkItemDtoSchema } from "./work.items.list.v1.contract";
+/** Owner-only receipt; read envelopes never expose the lease token. */
+const WorkItemLeaseReceiptSchema = z.object({
+  id: z.string(), runId: z.string(), leaseToken: z.string().uuid(),
+  claimedAt: z.string(), expiresAt: z.string(), lastCommand: z.string(), active: z.boolean(),
+});
 
 const WorkItemIdSchema = z
   .string()
@@ -28,7 +32,7 @@ export const workItemsClaimOperation = {
     runId: z.string().min(1),
     command: z.string().min(1),
   }),
-  output: WorkItemDtoSchema,
+  output: WorkItemLeaseReceiptSchema,
 } as const;
 
 export const workItemsHeartbeatOperation = {
@@ -39,9 +43,10 @@ export const workItemsHeartbeatOperation = {
   input: z.object({
     id: WorkItemIdSchema,
     runId: z.string().min(1),
+    leaseToken: z.string().uuid(),
     command: z.string().min(1).optional(),
   }),
-  output: WorkItemDtoSchema,
+  output: WorkItemLeaseReceiptSchema,
 } as const;
 
 export const workItemsReleaseOperation = {
@@ -52,8 +57,9 @@ export const workItemsReleaseOperation = {
   input: z.object({
     id: WorkItemIdSchema,
     runId: z.string().min(1),
+    leaseToken: z.string().uuid(),
   }),
-  output: WorkItemDtoSchema,
+  output: WorkItemLeaseReceiptSchema,
 } as const;
 
 export const WorkItemCoordinationSchema = z.object({

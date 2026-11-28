@@ -415,6 +415,7 @@ function createOpenAiSseStream(
 export const POST = wrapRouteHandlerWithLogging(
   {
     routeId: "chat.completions",
+    bearerWrite: "Runs as this caller with existing billing and graph authority",
     auth: { mode: "required", getSessionUser },
   },
   async (ctx, request, sessionUser) => {

@@ -23,6 +23,10 @@ import { TEST_SESSION_USER_1 } from "@tests/_fakes/ids";
 import { testApiHandler } from "next-test-api-route-handler";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("@/shared/env", () => ({
+  serverEnv: () => ({ APP_BASE_URL: "https://levelup.example" }),
+}));
+
 // Mock session authentication
 vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
@@ -88,7 +92,7 @@ describe("POST /api/v1/attribution/epochs/collect", () => {
       }: {
         fetch: (init?: RequestInit) => Promise<Response>;
       }) => {
-        const res = await fetch({ method: "POST" });
+        const res = await fetch({ method: "POST", headers: { origin: "https://levelup.example" } });
         expect(res.status).toBe(401);
         expect(mockScheduleControl.triggerSchedule).not.toHaveBeenCalled();
       },
@@ -105,7 +109,7 @@ describe("POST /api/v1/attribution/epochs/collect", () => {
       }: {
         fetch: (init?: RequestInit) => Promise<Response>;
       }) => {
-        const res = await fetch({ method: "POST" });
+        const res = await fetch({ method: "POST", headers: { origin: "https://levelup.example" } });
         expect(res.status).toBe(404);
         const body = await res.json();
         expect(body.error).toContain("LEDGER_INGEST");
@@ -128,7 +132,7 @@ describe("POST /api/v1/attribution/epochs/collect", () => {
       }: {
         fetch: (init?: RequestInit) => Promise<Response>;
       }) => {
-        const res = await fetch({ method: "POST" });
+        const res = await fetch({ method: "POST", headers: { origin: "https://levelup.example" } });
         expect(res.status).toBe(429);
         const body = await res.json();
         const parsed = CollectTriggerCooldownResponseSchema.parse(body);
@@ -148,7 +152,7 @@ describe("POST /api/v1/attribution/epochs/collect", () => {
       }: {
         fetch: (init?: RequestInit) => Promise<Response>;
       }) => {
-        const res = await fetch({ method: "POST" });
+        const res = await fetch({ method: "POST", headers: { origin: "https://levelup.example" } });
         expect(res.status).toBe(200);
         const body = await res.json();
         const parsed = CollectTriggerResponseSchema.parse(body);
@@ -176,7 +180,7 @@ describe("POST /api/v1/attribution/epochs/collect", () => {
       }: {
         fetch: (init?: RequestInit) => Promise<Response>;
       }) => {
-        const res = await fetch({ method: "POST" });
+        const res = await fetch({ method: "POST", headers: { origin: "https://levelup.example" } });
         expect(res.status).toBe(200);
         expect(mockScheduleControl.triggerSchedule).toHaveBeenCalledTimes(1);
       },

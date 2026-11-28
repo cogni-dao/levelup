@@ -86,7 +86,8 @@ vi.mock("@/shared/config", () => ({
   getNodeId: () => "node_template",
 }));
 vi.mock("@/shared/env", () => ({
-  serverEnv: () => ({ AUTH_SECRET: "stable-completion-idempotency-secret" }),
+  serverEnv: () => ({
+    APP_BASE_URL: "https://levelup.example", AUTH_SECRET: "stable-completion-idempotency-secret" }),
 }));
 
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -239,6 +240,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               messages: [{ role: "user", content: "Hello" }],
@@ -298,6 +300,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -327,6 +330,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               messages: [{ role: "user", content: "What's the weather?" }],
@@ -356,7 +360,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
       const first = await POST(
         new NextRequest("http://localhost:3000/api/v1/chat/completions", {
           method: "POST",
-          headers,
+          headers: { ...headers, origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               stream: true,
@@ -369,7 +373,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
       const changed = await POST(
         new NextRequest("http://localhost:3000/api/v1/chat/completions", {
           method: "POST",
-          headers,
+          headers: { ...headers, origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               stream: true,
@@ -393,6 +397,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
       const response = await POST(
         new NextRequest("http://localhost:3000/api/v1/chat/completions", {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         })
       );
@@ -414,6 +419,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
       const response = await POST(
         new NextRequest("http://localhost:3000/api/v1/chat/completions", {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         })
       );
@@ -434,6 +440,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               stream: true,
@@ -457,6 +464,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               stream: true,
@@ -487,6 +495,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -516,6 +525,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -553,6 +563,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({
               stream: true,
@@ -606,6 +617,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -656,6 +668,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: "not json",
         }
       );
@@ -677,6 +690,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify({ messages: [] }), // Missing model
         }
       );
@@ -700,6 +714,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -722,6 +737,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -743,6 +759,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -765,6 +782,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -791,6 +809,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -826,6 +845,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -850,6 +870,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -886,6 +907,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -923,6 +945,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest({ stream: true })),
         }
       );
@@ -945,6 +968,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -965,6 +989,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(createCompletionRequest()),
         }
       );
@@ -996,6 +1021,7 @@ describe("OpenAI Endpoint Parity (POST /v1/chat/completions)", () => {
         "http://localhost:3000/api/v1/chat/completions",
         {
           method: "POST",
+          headers: { origin: "https://levelup.example" },
           body: JSON.stringify(
             createCompletionRequest({ model: TEST_MODEL_ID })
           ),

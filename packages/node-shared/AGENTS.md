@@ -36,10 +36,11 @@ Shared pure utilities, constants, observability helpers, and domain types for al
 
 ## Public Surface
 
+- **Server-only subpath:** `@cogni/node-shared/auth` holds `linkIntentStore` and intent guards. Browser barrels expose session types only.
 - **Exports (via `src/index.ts`):**
   - **AI:** content scrubbing, prompt hashing, citation guard, tool catalog
   - **Analytics:** PostHog capture helper, event name registry
-  - **Auth:** `SessionUser`, `LinkIntent`, `linkIntentStore`, intent guards
+  - **Auth:** `SessionUser` and scheduler token helper
   - **Config:** `RepoSpecSchema` (Zod schema only — server accessor stays app-local)
   - **Constants:** `COGNI_SYSTEM_BILLING_ACCOUNT_ID`, `COGNI_SYSTEM_PRINCIPAL_USER_ID`, payment constants
   - **Crypto:** `aeadEncrypt`, `aeadDecrypt` (AES-256-GCM)

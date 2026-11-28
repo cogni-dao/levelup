@@ -37,11 +37,14 @@ vi.mock("@/shared/env/server", () => ({
   serverEnv: () => ({ AUTH_SECRET: "test-secret-for-unit-tests-only" }),
 }));
 
-import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
+import {
+  issueAgentApiKey,
+  resolveRequestIdentity,
+} from "@/app/_lib/auth/request-identity";
 
 function headersFromRecord(record: Record<string, string>) {
   const normalized = new Map(
-    Object.entries(record).map(([k, v]) => [k.toLowerCase(), v])
+    Object.entries(record).map(([k, v]) => [k.toLowerCase(), v]),
   );
   return {
     get: (name: string) => normalized.get(name.toLowerCase()) ?? null,
@@ -50,6 +53,7 @@ function headersFromRecord(record: Record<string, string>) {
 
 const FAKE_SESSION_USER = {
   id: "user-42",
+  via: "session" as const,
   walletAddress: null,
   displayName: "Tester",
   avatarColor: null,
@@ -74,7 +78,7 @@ describe("resolveRequestIdentity — circular-recursion regression", () => {
     mockHeaders.mockResolvedValue(
       headersFromRecord({
         authorization: "Bearer cogni_ag_sk_v1_not-a-real-token",
-      })
+      }),
     );
 
     const user = await resolveRequestIdentity();
@@ -99,5 +103,40 @@ describe("resolveRequestIdentity — circular-recursion regression", () => {
     expect(mockGetServerSessionUser).toHaveBeenCalledTimes(ITERATIONS);
     // Loose upper bound — a healthy resolver finishes 1000 mocked calls in well under 1s.
     expect(elapsedMs).toBeLessThan(1000);
+  });
+  it("carries bearer provenance from verification, preserving the subject even with a cookie", async () => {
+    const apiKey = issueAgentApiKey({
+      userId: "agent-42",
+      displayName: "Outside agent",
+    });
+    mockHeaders.mockResolvedValue(
+      headersFromRecord({ authorization: `Bearer ${apiKey}` }),
+    );
+    mockGetServerSessionUser.mockResolvedValue(FAKE_SESSION_USER);
+    expect(await resolveRequestIdentity()).toMatchObject({
+      id: "agent-42",
+      via: "bearer",
+      walletAddress: null,
+    });
+    expect(mockGetServerSessionUser).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    "Bearer",
+    "Bearer ",
+    "Bearer\tgarbage",
+    "Bearer garbage",
+  ])("never falls back to a cookie after claiming bearer: %s", async (authorization) => {
+    mockHeaders.mockResolvedValue(headersFromRecord({ authorization }));
+    mockGetServerSessionUser.mockResolvedValue(FAKE_SESSION_USER);
+    expect(await resolveRequestIdentity()).toBeNull();
+    expect(mockGetServerSessionUser).not.toHaveBeenCalled();
+  });
+
+  it("does not fall back to cookies when request headers are unavailable", async () => {
+    mockHeaders.mockRejectedValue(new Error("headers unavailable"));
+    mockGetServerSessionUser.mockResolvedValue(FAKE_SESSION_USER);
+    expect(await resolveRequestIdentity()).toBeNull();
+    expect(mockGetServerSessionUser).not.toHaveBeenCalled();
   });
 });

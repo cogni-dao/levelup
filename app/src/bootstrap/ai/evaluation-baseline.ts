@@ -1,31 +1,14 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
-/** Published evaluation behavior composed with LevelUp's existing product policy. */
+/** LevelUp uses the released contracts, including their schemas and authorization requirements. */
 import { type CatalogBoundTool, CORE_TOOL_BUNDLE } from "@cogni/ai-tools";
-import { CORE_TOOL_BUNDLE as SHARED_TOOL_BUNDLE,
-  type CatalogBoundTool as SharedCatalogBoundTool,
-} from "@cogni/shared-ai-tools";
+import { LEVELUP_TOOL_IDS } from "@cogni/node-template-graphs";
 
-const baselineIds = new Set([
-  "core__goal_list", "core__work_item_query", "core__work_item_read", "core__work_item_transition",
-  "core__knowledge_search",
-  "core__knowledge_read",
-  "core__knowledge_write",
-  "core__edo_hypothesize",
-  "core__edo_decide",
-  "core__edo_record_outcome", "core__get_current_time",
-  // Goal KPIs: contracts and bindings come from the published ai-tools and metrics releases.
-  "core__goal_progress", "core__metric_list", "core__metric_read",
-  "core__metric_history", "core__metric_compute",
-]);
-const localById = new Map(CORE_TOOL_BUNDLE.map((tool) => [tool.contract.name, tool]));
-export const LEVELUP_SHARED_TOOL_BUNDLE = SHARED_TOOL_BUNDLE.filter((tool) => baselineIds.has(tool.contract.name)).map((shared) => {
-  const local = localById.get(shared.contract.name);
-  return local ? { ...shared, contract: { ...local.contract, ...shared.contract } } : shared;
-});
-export const LEVELUP_LOCAL_TOOL_BUNDLE = CORE_TOOL_BUNDLE.filter((tool) => !baselineIds.has(tool.contract.name));
-export type LevelupCatalogBoundTool = CatalogBoundTool | SharedCatalogBoundTool;
-export const LEVELUP_CORE_TOOL_BUNDLE: readonly LevelupCatalogBoundTool[] = [
-  ...LEVELUP_LOCAL_TOOL_BUNDLE, ...LEVELUP_SHARED_TOOL_BUNDLE,
-];
+const hostTools = new Set<string>(LEVELUP_TOOL_IDS);
+export const LEVELUP_CORE_TOOL_BUNDLE = CORE_TOOL_BUNDLE.filter((tool) =>
+  hostTools.has(tool.contract.name),
+);
+export const LEVELUP_LOCAL_TOOL_BUNDLE: readonly CatalogBoundTool[] = [];
+export const LEVELUP_SHARED_TOOL_BUNDLE = LEVELUP_CORE_TOOL_BUNDLE;
+export type LevelupCatalogBoundTool = CatalogBoundTool;

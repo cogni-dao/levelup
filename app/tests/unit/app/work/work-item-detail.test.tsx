@@ -1,24 +1,20 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
-/** Proves every open work-item sheet state is named and described. */
+/** Proves every open work-item sheet state is named and described. The view itself is proven in knowledge-base-ui (story.0085). */
 
 // @vitest-environment happy-dom
 
 import "@testing-library/jest-dom/vitest";
 
+import { WorkItemReadError } from "@cogni/knowledge-base-ui/work-item";
 import type { WorkItemDto } from "@cogni/node-contracts";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render as renderUi, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { WorkItemFetchError } from "@/app/(app)/work/_api/fetchWorkItems";
 import { WorkItemDetail } from "@/app/(app)/work/_components/WorkItemDetail";
-
-vi.mock("@/app/(app)/_components/EntityCitationLinks", () => ({
-  EntityCitationLinks: () => null,
-}));
 
 const item: WorkItemDto = {
   id: "task.5174",
@@ -94,7 +90,7 @@ describe("WorkItemDetail accessibility", () => {
       <WorkItemDetail
         item={null}
         itemId="task.5174"
-        error={new WorkItemFetchError("missing", 404)}
+        error={new WorkItemReadError("item", 404)}
         open
         onOpenChange={vi.fn()}
       />
@@ -113,7 +109,7 @@ describe("WorkItemDetail accessibility", () => {
       <WorkItemDetail
         item={null}
         itemId="task.5174"
-        error={new WorkItemFetchError("busy", 503)}
+        error={new WorkItemReadError("item", 503)}
         open
         onOpenChange={vi.fn()}
       />

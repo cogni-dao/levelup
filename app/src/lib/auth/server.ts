@@ -11,17 +11,18 @@
  * @public
  */
 
-import type { SessionUser } from "@cogni/node-shared";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/auth";
+import type { AuthenticatedIdentity } from "@/shared/authenticated-identity";
 
-export async function getServerSessionUser(): Promise<SessionUser | null> {
+export async function getServerSessionUser(): Promise<AuthenticatedIdentity | null> {
   const session = await getServerSession(authOptions);
   const id = session?.user?.id;
   if (!id) return null;
 
   return {
     id,
+    via: "session",
     walletAddress: session?.user?.walletAddress ?? null,
     displayName: session?.user?.displayName ?? null,
     avatarColor: session?.user?.avatarColor ?? null,

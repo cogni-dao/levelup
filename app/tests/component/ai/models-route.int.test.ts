@@ -78,6 +78,7 @@ describe("/api/v1/ai/models component tests", () => {
 
     vi.mocked(getSessionUser).mockResolvedValue({
       id: "test-user",
+      via: "session",
       walletAddress: generateTestWallet("models-route-happy-path"),
     });
     mockModelCatalog.listModels.mockResolvedValue(catalogResult);
@@ -106,6 +107,7 @@ describe("/api/v1/ai/models component tests", () => {
 
     vi.mocked(getSessionUser).mockResolvedValue({
       id: "test-user",
+      via: "session",
       walletAddress: generateTestWallet("models-route-no-tags"),
     });
     mockModelCatalog.listModels.mockResolvedValue(catalogResult);
@@ -131,6 +133,7 @@ describe("/api/v1/ai/models component tests", () => {
   it("should return 503 when catalog fails", async () => {
     vi.mocked(getSessionUser).mockResolvedValue({
       id: "test-user",
+      via: "session",
       walletAddress: generateTestWallet("models-route-cache-fail"),
     });
     mockModelCatalog.listModels.mockRejectedValue(new Error("Catalog error"));

@@ -40,6 +40,8 @@ All contract files re-exported via `src/index.ts`. Selective re-export for `ai.c
 
 - `identity.attestation.v1.contract` — frozen operator↔node identity protocol, canonical HTTPS-origin schema, and cross-repository protocol fingerprint
 
+Work-item coordination returns owner-only lease receipts. Heartbeat/release require leaseToken; DELETE item returns410 and callers use reasoned revisioned cancellation.
+
 **Attribution lifecycle contracts:**
 
 - `attribution.settlement-lifecycle.v1.contract` — authenticated read of live/latest settlement revisions and per-epoch publication coverage

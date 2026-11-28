@@ -20,12 +20,10 @@ import { LANGGRAPH_CATALOG } from "@cogni/node-template-graphs";
 import {
   type AgentCatalogProvider,
   AggregatingAgentCatalog,
-  LangGraphDevAgentCatalogProvider,
   LangGraphInProcAgentCatalogProvider,
 } from "@/adapters/server";
 import { SandboxAgentCatalogProvider } from "@/adapters/server/sandbox/sandbox-agent-catalog.provider";
 import type { AgentDescriptor } from "@/ports";
-import { serverEnv } from "@/shared/env";
 
 /**
  * Create discovery-only aggregator.
@@ -42,11 +40,10 @@ import { serverEnv } from "@/shared/env";
 export function createAgentCatalog(): {
   listAgents(): readonly AgentDescriptor[];
 } {
-  // Per MUTUAL_EXCLUSION: choose provider based on LANGGRAPH_DEV_URL env
-  const env = serverEnv();
-  const providers: AgentCatalogProvider[] = env.LANGGRAPH_DEV_URL
-    ? [new LangGraphDevAgentCatalogProvider()]
-    : [new LangGraphInProcAgentCatalogProvider(LANGGRAPH_CATALOG)];
+  // Discovery always lists the same composed catalog as execution.
+  const providers: AgentCatalogProvider[] = [
+    new LangGraphInProcAgentCatalogProvider(LANGGRAPH_CATALOG),
+  ];
 
   // Sandbox agents always registered — LITELLM_MASTER_KEY enforced by assertRuntimeSecrets()
   providers.push(new SandboxAgentCatalogProvider());

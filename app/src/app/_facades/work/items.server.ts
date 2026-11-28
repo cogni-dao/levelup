@@ -31,10 +31,14 @@ import type {
   WorkBoardColumnPages,
   WorkItem,
   WorkItemId,
+  WorkItemsBusyReason,
   WorkSummaryReadOptions,
+  WriteAttribution,
 } from "@cogni/work-items";
 import {
+  backendUnavailableReason,
   composeItemEnvelope,
+  createItemRefPorts,
   judgeMoveSummaries,
   toWorkItemDto as toDto,
   toWorkItemId,
@@ -49,7 +53,6 @@ import {
 } from "@cogni/knowledge-store";
 import { createCitationLinksPort } from "@/bootstrap/capabilities/citation-links";
 import { createMoveMetricPorts } from "@/bootstrap/capabilities/work-item-moves";
-import { createItemRefPorts } from "@/bootstrap/capabilities/work-item-refs";
 import { getContainer } from "@/bootstrap/container";
 
 /**
@@ -121,15 +124,14 @@ export interface WorkItemActor {
   walletAddress?: string | null;
 }
 
-export class WorkItemLeaseConflictError extends Error {
-  constructor(id: string) {
-    super(`Work item is claimed by another principal or lease: ${id}`);
-    this.name = "WorkItemLeaseConflictError";
-  }
-}
+import { WorkItemLeaseConflictError } from "@cogni/work-items/adapters/doltgres";
+export { WorkItemLeaseConflictError };
 
 export class WorkItemsBackendNotReadyError extends Error {
-  constructor(message: string) {
+  constructor(
+    message: string,
+    readonly reason: WorkItemsBusyReason
+  ) {
     super(message);
     this.name = "WorkItemsBackendNotReadyError";
   }
@@ -204,9 +206,14 @@ function rethrowBackendError(error: unknown): never {
   if (
     (error as Error)?.name === "DoltgresNotConfiguredError" ||
     (error as Error)?.name === "WorkItemsBusyError" ||
+    (error as Error)?.name === "UnprovableTransitionError" ||
     (error as Error)?.name === "DoltMergeOutcomeUnknownError"
   ) {
-    throw new WorkItemsBackendNotReadyError(message);
+    // The 503 names its reason (task.0162); a busy-named error that carries none is the base "store busy" case.
+    throw new WorkItemsBackendNotReadyError(
+      message,
+      backendUnavailableReason(error) ?? "capacity_held"
+    );
   }
   if ((error as Error)?.name === "WorkItemAuthorizationError") {
     const id = (error as { id?: string }).id ?? "unknown";
@@ -458,16 +465,18 @@ export async function getWorkItem(
   return mdItem ? withItemEnvelope(toDto(mdItem), options) : null;
 }
 
+/** `attribution` is the route's one host-built value (`routeAttribution(caller)`): the same object the route's terminal event names, so the record and the log cannot disagree. */
 export async function createWorkItem(
   input: ContractCreateInput,
-  sessionUser: WorkItemActor
+  sessionUser: WorkItemActor,
+  attribution: WriteAttribution
 ): Promise<WorkItemDto> {
   await assertPriorityAuthority(input.priority, sessionUser);
   const container = getContainer();
   try {
     const created = await container.doltgresWorkItems.create(
       toWorkItemsCreateInput(input),
-      sessionUser.id
+      attribution
     );
     return await withMoveReadings(toDto(created));
   } catch (e) {
@@ -477,32 +486,18 @@ export async function createWorkItem(
 
 export async function patchWorkItem(
   input: ContractPatchInput,
-  sessionUser: WorkItemActor
+  sessionUser: WorkItemActor,
+  attribution: WriteAttribution
 ): Promise<WorkItemDto> {
   await assertPriorityAuthority(input.set.priority, sessionUser);
   const container = getContainer();
   try {
     const patched = await container.doltgresWorkItems.patch(
       toWorkItemsPatchInput(input),
-      sessionUser.id
+      attribution
     );
     if (!patched) throw new WorkItemNotFoundError(input.id);
     return await withMoveReadings(toDto(patched));
-  } catch (e) {
-    rethrowBackendError(e);
-  }
-}
-
-export async function deleteWorkItem(
-  id: string,
-  sessionUser: { id: string }
-): Promise<boolean> {
-  const container = getContainer();
-  try {
-    return await container.doltgresWorkItems.delete(
-      toWorkItemId(id),
-      sessionUser.id
-    );
   } catch (e) {
     rethrowBackendError(e);
   }
@@ -513,16 +508,17 @@ export async function claimWorkItem(input: {
   runId: string;
   command: string;
   principalId: string;
-}): Promise<WorkItemDto> {
+}): Promise<import("@cogni/work-items").WorkItemLease> {
   const container = getContainer();
   try {
+    if (!(await container.doltgresWorkItems.get(toWorkItemId(input.id)))) throw new WorkItemNotFoundError(input.id);
     const item = await container.doltgresWorkItems.claim({
       id: toWorkItemId(input.id),
       runId: input.runId,
       command: input.command,
       principalId: input.principalId,
     });
-    return toDto(item);
+    return item;
   } catch (error) {
     rethrowBackendError(error);
   }
@@ -532,15 +528,17 @@ export async function releaseWorkItem(input: {
   id: string;
   runId: string;
   principalId: string;
-}): Promise<WorkItemDto> {
+  leaseToken: string;
+}): Promise<import("@cogni/work-items").WorkItemLease> {
   const container = getContainer();
   try {
     const item = await container.doltgresWorkItems.release({
       id: toWorkItemId(input.id),
       runId: input.runId,
       principalId: input.principalId,
+      leaseToken: input.leaseToken,
     });
-    return toDto(item);
+    return item;
   } catch (error) {
     rethrowBackendError(error);
   }
@@ -551,7 +549,8 @@ export async function heartbeatWorkItem(input: {
   runId: string;
   command?: string;
   principalId: string;
-}): Promise<WorkItemDto> {
+  leaseToken: string;
+}): Promise<import("@cogni/work-items").WorkItemLease> {
   const container = getContainer();
   try {
     const item = await container.doltgresWorkItems.heartbeat({
@@ -559,8 +558,9 @@ export async function heartbeatWorkItem(input: {
       runId: input.runId,
       ...(input.command !== undefined && { command: input.command }),
       principalId: input.principalId,
+      leaseToken: input.leaseToken,
     });
-    return toDto(item);
+    return item;
   } catch (error) {
     rethrowBackendError(error);
   }

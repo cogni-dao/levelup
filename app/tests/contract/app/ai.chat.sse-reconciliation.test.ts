@@ -88,6 +88,7 @@ vi.mock("@/shared/ai/model-catalog.server", () => ({
 
 vi.mock("@/shared/env", () => ({
   serverEnv: () => ({
+    APP_BASE_URL: "https://levelup.example",
     AUTH_SECRET: "test-auth-secret-at-least-32-characters",
   }),
 }));
@@ -166,7 +167,7 @@ function createSyntheticStream(opts: {
 function buildChatRequest(): NextRequest {
   return new NextRequest("http://localhost:3000/api/v1/ai/chat", {
     method: "POST",
-    headers: { "content-type": "application/json" },
+    headers: { origin: "https://levelup.example", "content-type": "application/json" },
     body: JSON.stringify({
       message: "Hello",
       modelRef: { providerKey: "platform", modelId: "test-model" },
