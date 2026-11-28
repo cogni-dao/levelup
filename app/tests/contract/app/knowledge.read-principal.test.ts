@@ -48,7 +48,7 @@ vi.mock("@/bootstrap/container", () => ({
     // deny/allow/revoke behavior is retained in levelup-authority.test.ts.
     agentAuthority: {
       authorizeRoute: async ({ toolId, userId, via }: { toolId: string; userId: string; via: string }) =>
-        toolId === "knowledge.read" && userId === TEST_SESSION_USER_1.id && via === "bearer"
+        toolId === "knowledge.read" && userId === TEST_SESSION_USER_1.id && (via === "bearer" || via === "session")
           ? { decision: "allow" }
           : { decision: "deny", code: "forbidden" },
     },
@@ -63,6 +63,11 @@ vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn().mockResolvedValue({ ...TEST_SESSION_USER_1, via: "bearer" }),
 }));
 
+vi.mock("@/shared/env", () => ({
+  serverEnv: () => ({ APP_BASE_URL: "https://levelup.example" }),
+}));
+
+import { getSessionUser } from "@/app/_lib/auth/session";
 import * as entryHandler from "@/app/api/v1/knowledge/[id]/route";
 import * as domainItemHandler from "@/app/api/v1/knowledge/domains/[domain]/route";
 import * as domainsHandler from "@/app/api/v1/knowledge/domains/route";
@@ -100,6 +105,7 @@ async function seedStore(store: FakeKnowledgeStoreAdapter) {
 describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
   beforeEach(async () => {
     vi.clearAllMocks();
+    vi.mocked(getSessionUser).mockResolvedValue({ ...TEST_SESSION_USER_1, via: "bearer" });
     mockStore = new FakeKnowledgeStoreAdapter();
     await seedStore(mockStore);
   });
@@ -200,19 +206,44 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
       },
     });
   });
-  it("uses existing bearer auth for domain CRUD and refuses invalid/nonempty/protected deletes", async () => {
+  it("refuses undeclared bearer domain mutations before changing the registry", async () => {
     await mockStore.registerDomain({ id: "scratch", name: "Scratch" });
     await testApiHandler({
       appHandler: domainItemHandler,
       params: { domain: "scratch" },
       url: "/api/v1/knowledge/domains/scratch",
       async test({ fetch }) {
-        expect((await fetch({ method: "GET", headers: BEARER })).status).toBe(
+        for (const method of ["PATCH", "DELETE"]) {
+          const response = await fetch({
+            method,
+            headers: { ...BEARER, "content-type": "application/json" },
+            ...(method === "PATCH" ? { body: JSON.stringify({ name: "Must not write" }) } : {}),
+          });
+          expect(response.status).toBe(403);
+          expect(response.headers.get("cache-control")).toBe("no-store");
+        }
+        const response = await fetch({ method: "GET", headers: BEARER });
+        expect(response.status).toBe(200);
+        expect(await response.json()).toMatchObject({ id: "scratch", name: "Scratch" });
+      },
+    });
+  });
+
+  it("preserves session domain CRUD and refuses invalid/nonempty/protected deletes", async () => {
+    vi.mocked(getSessionUser).mockResolvedValue(TEST_SESSION_USER_1);
+    const sessionHeaders = { origin: "https://levelup.example" };
+    await mockStore.registerDomain({ id: "scratch", name: "Scratch" });
+    await testApiHandler({
+      appHandler: domainItemHandler,
+      params: { domain: "scratch" },
+      url: "/api/v1/knowledge/domains/scratch",
+      async test({ fetch }) {
+        expect((await fetch({ method: "GET", headers: sessionHeaders })).status).toBe(
           200
         );
         const patch = await fetch({
           method: "PATCH",
-          headers: { ...BEARER, "content-type": "application/json" },
+          headers: { ...sessionHeaders, "content-type": "application/json" },
           body: JSON.stringify({ name: "Renamed", description: null }),
         });
         expect(patch.status).toBe(200);
@@ -223,14 +254,14 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
         });
         const invalid = await fetch({
           method: "PATCH",
-          headers: { ...BEARER, "content-type": "application/json" },
+          headers: { ...sessionHeaders, "content-type": "application/json" },
           body: "{}",
         });
         expect(invalid.status).toBe(400);
         expect(
-          (await fetch({ method: "DELETE", headers: BEARER })).status
+          (await fetch({ method: "DELETE", headers: sessionHeaders })).status
         ).toBe(200);
-        expect((await fetch({ method: "GET", headers: BEARER })).status).toBe(
+        expect((await fetch({ method: "GET", headers: sessionHeaders })).status).toBe(
           404
         );
       },
@@ -244,7 +275,7 @@ describe("knowledge read routes — KNOWLEDGE_READ_REQUIRES_PRINCIPAL", () => {
         params: { domain },
         url: `/api/v1/knowledge/domains/${domain}`,
         async test({ fetch }) {
-          const response = await fetch({ method: "DELETE", headers: BEARER });
+          const response = await fetch({ method: "DELETE", headers: sessionHeaders });
           expect(response.status).toBe(409);
           expect(await response.json()).toMatchObject({ errorCode });
         },
